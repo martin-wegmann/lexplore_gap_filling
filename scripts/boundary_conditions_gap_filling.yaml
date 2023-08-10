@@ -1,0 +1,7 @@
+# This file contains all the output directories where the processed data is stored by the main running script
+
+#### DO NOT CHANGE THE VARIABLE NAMES ####
+
+focus_period_start: "2020-06-01"
+
+focus_period_end: "2023-05-31"
