@@ -2,7 +2,9 @@
 
 #### DO NOT CHANGE THE VARIABLE NAMES ####
 
-data_output_folder: "/Volumes/lexplore_hd/g2s_input/"
+g2s_input_folder: "/Volumes/lexplore_hd/g2s_input/"
+
+g2s_output_folder: "/Volumes/lexplore_hd/g2s_output/"
 
 tchain_folder: "/Volumes/lexplore_hd/core_data/thermister-chain/"
 
