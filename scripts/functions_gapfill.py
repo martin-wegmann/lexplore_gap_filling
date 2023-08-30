@@ -6,6 +6,7 @@
 
 import numpy as np
 import xarray as xr
+import pandas as pd
 import netCDF4
 import os
 import datetime
@@ -189,19 +190,235 @@ def create_gap_index(da,gap_percent,gap_length):
     gap_number=int(np.round(gap_amount_num/gap_length))
     gap_location=[]
     for i in range(gap_number):
-        gap_location.append(randrange(len_var))
+        rand_location=randrange(len_var)
+        # the 50 is a bit arbitraty, its like 96/2 and some, while 96 being probably our biggest gap we check for
+        # the 48 left and right are also a bit arbitrary, it is basically the biggest gap I wanna check (96)
+        while np.sum(np.isnan(da[rand_location-48:rand_location+48].values))>0 or rand_location <50 or rand_location >len_var-50:
+            rand_location=randrange(len_var)
+        gap_location.append(rand_location)
     return gap_location
 
 def create_gapped_ts(da,gap_locations,gap_length,selector=1):
     """This one introduces nans at the gap locations for a certain length""" 
     # the selector has to be 1 for 24, 2 for 48,3 for 72, 4 for 96 etc
     print("Amount NAs in orig :"+str(np.isnan(da.values).sum()))
+    
     len_var=da.data.size
+    print("% NAs in orig :"+str(np.isnan(da.values).sum()/len_var*100))
     da_new=da.copy()
     if selector>1:
         gap_locations=gap_locations[0::selector]
     for i in gap_locations:
-        da_new[i:i+gap_length]=np.nan
+        da_new[int(i-gap_length/2):int(i+gap_length/2)]=np.nan
     print("Amount NAs in new :"+str(np.isnan(da_new.values).sum()))
-    print((np.isnan(da_new.values).sum()-np.isnan(da.values).sum())/len_var*100)
+    print("% NAs in new :"+str(np.isnan(da_new.values).sum()/len_var*100))
+    print("Added % NAs :"+str((np.isnan(da_new.values).sum()-np.isnan(da.values).sum())/len_var*100))
     return da_new
+
+def univ_g2s(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name):
+    data_original = original[var]
+    output_name=csv_folder+name+var+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+
+    timeofday = data_original.time.dt.hour.values #C
+    runs=np.arange(1,test_runs+1)
+    
+    for run in runs:
+        for percent in percent_list:
+            gap_locations=create_gap_index(da=data_original,gap_percent=percent,gap_length=24)
+
+            for i in range(len(gap_amount_list)):
+                gapped_data=create_gapped_ts(da=data_original,gap_locations=gap_locations,gap_length=gap_amount_list[i],selector=selector_list[i])
+                L = gapped_data.data.size
+                sin_calendar = sin_costfunction(L,daily_timesteps = obs_in_day)
+                cos_calendar = cos_costfunction(L,daily_timesteps = obs_in_day)
+                print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+
+                #Univariate gap-filling
+                name_addedinfo="UV"
+                ti = gapped_data.data
+                di = gapped_data.data
+                dt = [0]
+
+                stacked = ensemble_QS(N = N,
+                                      ti=ti, 
+                                      di=di,
+                                      dt=dt, #Zero for continuous variables
+                                      k=1.2,
+                                      n=50,
+                                      j=0.5,
+                                      ki=None)
+                simulations = xr.DataArray(data =stacked,coords = {'realizations':np.arange(1,stacked.shape[0]+1),'time':gapped_data.time})
+
+                corr=np.round(xr.corr(data_original, simulations, dim="time").mean(dim="realizations").values,4)
+                error = np.round(np.sqrt(np.nanmean((simulations.data-data_original.data)**2)),4)
+                std_ratio=np.round((data_original/simulations).mean(dim="realizations").mean(dim="time").values,4)
+
+                df_temp = pd.DataFrame([[name_addedinfo,run, N, percent, gap_amount_list[i], corr,error,std_ratio]], columns=df.columns)
+                df = pd.concat([df, df_temp], axis=0)
+                
+                df.to_csv(output_name, index=False)
+    return simulations,df
+
+def day_of_year_g2s(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name):
+    data_original = original[var]
+    output_name=csv_folder+name+var+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+
+    timeofday = data_original.time.dt.hour.values #C
+    runs=np.arange(1,test_runs+1)
+    
+    for run in runs:
+        for percent in percent_list:
+            gap_locations=create_gap_index(da=data_original,gap_percent=percent,gap_length=24)
+
+            for i in range(len(gap_amount_list)):
+                gapped_data=create_gapped_ts(da=data_original,gap_locations=gap_locations,gap_length=gap_amount_list[i],selector=selector_list[i])
+                L = gapped_data.data.size
+                sin_calendar = sin_costfunction(L,daily_timesteps = obs_in_day)
+                cos_calendar = cos_costfunction(L,daily_timesteps = obs_in_day)
+                print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+
+                #Univariate gap-filling
+                name_addedinfo="calday"
+                ti = np.stack([gapped_data.data,sin_calendar,cos_calendar],axis = 1)
+                di = np.stack([gapped_data, sin_calendar,cos_calendar],axis = 1)
+                dt = [0,0,0] #3 continuous variables
+
+                stacked = ensemble_QS(N = N,
+                                      ti=ti, 
+                                      di=di,
+                                      dt=dt, #Zero for continuous variables
+                                      k=1.2,
+                                      n=50,
+                                      j=0.5,
+                                      ki=None)
+                simulations = xr.DataArray(data =stacked[:,:,0], 
+                                            coords = {'realizations':np.arange(1,stacked.shape[0]+1),'time':gapped_data.time})
+
+                corr=np.round(xr.corr(data_original, simulations, dim="time").mean(dim="realizations").values,4)
+                error = np.round(np.sqrt(np.nanmean((simulations.data-data_original.data)**2)),4)
+                std_ratio=np.round((data_original/simulations).mean(dim="realizations").mean(dim="time").values,4)
+
+                df_temp = pd.DataFrame([[name_addedinfo,run, N, percent, gap_amount_list[i], corr,error,std_ratio]], columns=df.columns)
+                df = pd.concat([df, df_temp], axis=0)
+
+                df.to_csv(output_name, index=False)
+    return simulations,df
+
+
+def time_of_day_of_year_g2s(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name):
+    data_original = original[var]
+    output_name=csv_folder+name+var+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+
+    timeofday = data_original.time.dt.hour.values #C
+    runs=np.arange(1,test_runs+1)
+    
+    for run in runs:
+        for percent in percent_list:
+            gap_locations=create_gap_index(da=data_original,gap_percent=percent,gap_length=24)
+
+            for i in range(len(gap_amount_list)):
+                gapped_data=create_gapped_ts(da=data_original,gap_locations=gap_locations,gap_length=gap_amount_list[i],selector=selector_list[i])
+                L = gapped_data.data.size
+                sin_calendar = sin_costfunction(L,daily_timesteps = obs_in_day)
+                cos_calendar = cos_costfunction(L,daily_timesteps = obs_in_day)
+                print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+
+                #Univariate gap-filling
+                name_addedinfo="caldaytimeday"
+                ti = np.stack([gapped_data.data,
+                            sin_calendar,
+                            cos_calendar,
+                            timeofday],axis = 1)
+                di = np.stack([ gapped_data.data,
+                            sin_calendar,
+                            cos_calendar,
+                            timeofday],axis = 1)
+                #ki = np.ones([L,4])
+                #ki[:,:3] = 0.5 #Assign half weight to categorical variable 
+                dt = [0,0,0,1]  #time of day is a categorical variable
+
+                stacked = ensemble_QS(N = N,
+                                      ti=ti, 
+                                      di=di,
+                                      dt=dt, #Zero for continuous variables
+                                      k=1.2,
+                                      n=50,
+                                      j=0.5,
+                                      ki=None)
+
+                simulations = xr.DataArray(data =stacked[:,:,0],
+                                            coords = {'realizations':np.arange(1,stacked.shape[0]+1),'time':gapped_data.time})        
+
+                corr=np.round(xr.corr(data_original, simulations, dim="time").mean(dim="realizations").values,4)
+                error = np.round(np.sqrt(np.nanmean((simulations.data-data_original.data)**2)),4)
+                std_ratio=np.round((data_original/simulations).mean(dim="realizations").mean(dim="time").values,4)
+
+                df_temp = pd.DataFrame([[name_addedinfo,run, N, percent, gap_amount_list[i], corr,error,std_ratio]], columns=df.columns)
+                df = pd.concat([df, df_temp], axis=0)
+
+                df.to_csv(output_name, index=False)
+    return simulations,df
+
+def one_cov_g2s(original,var1,cov,var2,cov_name,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name):
+    data_original = original[var1]
+    output_name=csv_folder+name+var1+".csv"
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+
+    timeofday = data_original.time.dt.hour.values #C
+    runs=np.arange(1,test_runs+1)
+    
+    for run in runs:
+        for percent in percent_list:
+            gap_locations=create_gap_index(da=data_original,gap_percent=percent,gap_length=24)
+
+            for i in range(len(gap_amount_list)):
+                gapped_data=create_gapped_ts(da=data_original,gap_locations=gap_locations,gap_length=gap_amount_list[i],selector=selector_list[i])
+                L = gapped_data.data.size
+                sin_calendar = sin_costfunction(L,daily_timesteps = obs_in_day)
+                cos_calendar = cos_costfunction(L,daily_timesteps = obs_in_day)
+                print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+
+                #gap-filling with one covariate
+                covar2 = cov[var2].copy()
+                name_addedinfo=cov_name
+                #covar2.loc[dict(time = covar2.time[gap_indices])] = np.nan
+
+                ti = np.stack([gapped_data.data,
+                            covar2],axis = 1)
+                di = np.stack([gapped_data.data,
+                            covar2],axis = 1)
+                dt = [0,0,] 
+                #ki = np.ones([L,5])
+                #ki[:,:4] = 0.3 #Assign half weight to categorical variable 
+
+
+                stacked = ensemble_QS(N = N,
+                                      ti=ti, 
+                                      di=di,
+                                      dt=dt, #Zero for continuous variables
+                                      k=1.2,
+                                      n=50,
+                                      j=0.5,
+                                      ki=None)
+                simulations = xr.DataArray(data =stacked[:,:,0],
+                                            coords = {'realizations':np.arange(1,stacked.shape[0]+1),'time':gapped_data.time})
+
+                corr=np.round(xr.corr(data_original, simulations, dim="time").mean(dim="realizations").values,4)
+                error = np.round(np.sqrt(np.nanmean((simulations.data-data_original.data)**2)),4)
+                std_ratio=np.round((data_original/simulations).mean(dim="realizations").mean(dim="time").values,4)
+
+                df_temp = pd.DataFrame([[name_addedinfo,run, N, percent, gap_amount_list[i], corr,error,std_ratio]], columns=df.columns)
+                df = pd.concat([df, df_temp], axis=0)
+
+                df.to_csv(output_name, index=False)
+    return simulations,df
