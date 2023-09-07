@@ -56,16 +56,20 @@ def compute_gap_sizes(var):
                 gap_sizes.append(count)
     return np.array(gap_sizes)
 
-def gap_info(var,varname):
+def gap_info(var,varname,plot_folder):
     print(f"{varname} has {np.count_nonzero(np.isnan(var.data))} nans in {var.data.size} data points")
     gap_sizes = compute_gap_sizes(var)
-    print(f"{varname} has {np.count_nonzero(np.isnan(var.data))/var.data.size*100}% missing values")
+    print(f"{varname} has {np.round(np.count_nonzero(np.isnan(var.data))/var.data.size*100,2)}% missing values")
     print(f"{varname} has {len(gap_sizes)} gaps with {np.median(gap_sizes)} median gap size")
-    print(f"{varname} has {len(gap_sizes)} gaps with {np.mean(gap_sizes)} mean gap size")
+    print(f"{varname} has {len(gap_sizes)} gaps with {np.round(np.mean(gap_sizes),2)} mean gap size")
     
-    plt.figure(figsize=(7,2))
-    plt.title(f"{varname} has {len(gap_sizes)} gaps with {np.median(gap_sizes)} median gap size")
+    plt.figure(figsize=(10,4))
+    plt.title(f"{np.count_nonzero(np.isnan(var.data))} nans, {len(gap_sizes)} gaps, {np.median(gap_sizes)} median gap size, {np.round(np.mean(gap_sizes),2)} mean gap size, {np.round(np.count_nonzero(np.isnan(var.data))/var.data.size*100,2)}% missing values")
     plt.boxplot(np.array(gap_sizes),vert = False)
+    plt.tight_layout()
+    plt.savefig(plot_folder+varname+"_gap_distribution.png")
+    plt.show()
+    return
     
 def create_gaps(var, gap_number,max_gap_size = 14):
     """Creates new gaps in var with the by resampling from existing gap sizes 
@@ -107,7 +111,7 @@ def cos_costfunction(length,daily_timesteps = 4):
 def rmse(original, simulation):
     return np.sqrt(np.nanmean((original-simulation)**2))
 
-def plot_MPS_ensembles(original, simulation, year, start_month, end_month, alpha = 0.5,title=None):
+def plot_MPS_ensembles(original, simulation, year, start_month, end_month,plot_folder, alpha = 0.5,title=None):
     """Plots the original data and an ensemble of simulations in a single figure for several months"""
     f1,ax1 = plt.subplots(figsize = (35,5))
     ensemble = simulation.loc[dict(time=slice(f"{str(year)}-{str(start_month)}",f"{str(year)}-{str(end_month)}"))].plot.line(
@@ -117,6 +121,13 @@ def plot_MPS_ensembles(original, simulation, year, start_month, end_month, alpha
     ax1.grid()
     RMSE = rmse(original.data,simulation.data)
     ax1.set_title( f"{title} RMSE = {np.round(RMSE,3)}")
+    plt.tight_layout()
+    plt.savefig(plot_folder+title+"_simulation_example.png")
+    plt.savefig(plot_folder+title+"_simulation_example.pdf")
+    plt.show()
+    return
+    
+    
 
 def normalize_image(array):
     """Normalizes an array 
@@ -227,7 +238,7 @@ def univ_g2s(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_lis
     
     for run in runs:
         for percent in percent_list:
-            gap_locations=create_gap_index(da=data_original,gap_percent=percent,gap_length=24)
+            gap_locations,ds24=create_gap_index_nooverlap(da=data_original,gap_percent=percent,gap_length=24)
 
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts(da=data_original,gap_locations=gap_locations,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -274,7 +285,7 @@ def day_of_year_g2s(original,var,obs_in_day,N,percent_list,gap_amount_list,selec
     
     for run in runs:
         for percent in percent_list:
-            gap_locations=create_gap_index(da=data_original,gap_percent=percent,gap_length=24)
+            gap_locations,ds24=create_gap_index_nooverlap(da=data_original,gap_percent=percent,gap_length=24)
 
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts(da=data_original,gap_locations=gap_locations,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -323,7 +334,7 @@ def time_of_day_of_year_g2s(original,var,obs_in_day,N,percent_list,gap_amount_li
     
     for run in runs:
         for percent in percent_list:
-            gap_locations=create_gap_index(da=data_original,gap_percent=percent,gap_length=24)
+            gap_locations,ds24=create_gap_index_nooverlap(da=data_original,gap_percent=percent,gap_length=24)
 
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts(da=data_original,gap_locations=gap_locations,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -379,7 +390,7 @@ def one_cov_g2s(original,var1,cov,var2,cov_name,obs_in_day,N,percent_list,gap_am
     
     for run in runs:
         for percent in percent_list:
-            gap_locations=create_gap_index(da=data_original,gap_percent=percent,gap_length=24)
+            gap_locations,ds24=create_gap_index_nooverlap(da=data_original,gap_percent=percent,gap_length=24)
 
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts(da=data_original,gap_locations=gap_locations,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -422,3 +433,51 @@ def one_cov_g2s(original,var1,cov,var2,cov_name,obs_in_day,N,percent_list,gap_am
 
                 df.to_csv(output_name, index=False)
     return simulations,df
+
+
+def create_gap_index_test(da,gap_percent,gap_length):
+    """Inputs: data array, how many percent of missing data from the data array length we wanna create, length of each gap 
+    Output: A list of random locations where to put the gaps.""" 
+    len_var=da.data.size
+    gap_amount_num=int(np.round(gap_percent/100*len_var))
+    gap_number=int(np.round(gap_amount_num/gap_length))
+    gap_location=[]
+    for i in range(gap_number):
+        rand_location=randrange(len_var)
+        empty_list=[0]
+        # the 50 is a bit arbitraty, its like 96/2 and some, while 96 being probably our biggest gap we check for
+        # the 48 left and right are also a bit arbitrary, it is basically the biggest gap I wanna check (96)
+        while np.sum(empty_list)>0 or np.sum(np.isnan(da[rand_location-48:rand_location+48].values))>0 or rand_location <50 or rand_location >len_var-50:
+            rand_location=randrange(len_var)
+            empty_list=[0]
+            for i in range(len(gap_location)):
+                lower_limit=np.asarray(gap_location)-50
+                upper_limit=np.asarray(gap_location)+50
+                empty_list.append(lower_limit[i] <= rand_location <= upper_limit[i])
+            
+            
+            
+            
+        gap_location.append(rand_location)
+    return gap_location
+
+def create_gap_index_nooverlap(da,gap_percent,gap_length):
+    """Inputs: data array, how many percent of missing data from the data array length we wanna create, length of each gap 
+    Output: A list of random locations where to put the gaps.""" 
+    len_var=da.data.size
+    da_cp=da.copy()
+    gap_amount_num=int(np.round(gap_percent/100*len_var))
+    gap_number=int(np.round(gap_amount_num/gap_length))
+    gap_location=[]
+    for i in range(gap_number):
+        rand_location=randrange(len_var)
+        
+        # the 50 is a bit arbitraty, its like 96/2 and some, while 96 being probably our biggest gap we check for
+        # the 48 left and right are also a bit arbitrary, it is basically the biggest gap I wanna check (96)
+        while np.sum(np.isnan(da_cp[rand_location-51:rand_location+51].values))>0 or rand_location <51 or rand_location >len_var-51:
+            
+            rand_location=randrange(len_var)
+        gap_location.append(rand_location)
+        da_cp[rand_location-int(gap_length/2):rand_location+int(gap_length/2)]=np.nan
+    return gap_location,da_cp
+
