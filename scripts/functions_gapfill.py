@@ -226,6 +226,34 @@ def create_gapped_ts(da,gap_locations,gap_length,selector=1):
     print("Added % NAs :"+str((np.isnan(da_new.values).sum()-np.isnan(da.values).sum())/len_var*100))
     return da_new
 
+def find_large_nan_gaps(arr, N):
+    # Find indices where arr is not np.nan
+    nan_indices = np.where(~np.isnan(arr))[0]
+    # Calculate the gaps between NaNs
+    nan_gaps = np.diff(nan_indices) - 1
+    # Find indices where nan_gaps are larger than N
+    large_gap_indices = np.where(nan_gaps > N)[0]
+    # Initialize a list to store all the indices within large gaps
+    all_gap_indices = []
+    for gap_index in large_gap_indices:
+        gap_start = nan_indices[gap_index] + 1  
+        gap_end = nan_indices[gap_index + 1]    
+        gap_indices = np.arange(gap_start, gap_end)
+        all_gap_indices.extend(gap_indices.tolist())
+    return all_gap_indices  
+
+def generate_simulation_path_wo_gaps(di,max_gap_size):
+    #Identify location of the large gaps
+    large_gap_indices = find_large_nan_gaps(di,max_gap_size)
+    #Start with a linear simulation path 
+    indices = np.arange(di.size,dtype = float)
+    #Take out the large gaps, -inf in the simulation path are skipped (np.nans are automatically filled)
+    #indices[large_gap_indices] = -np.inf # Somehow this doesn't work 
+    #Shuffle around the indices to create a random path first with and then without the large gaps
+    sp = np.random.permutation(indices)
+    sp[large_gap_indices] = -np.inf
+    return sp
+
 def univ_g2s(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name):
     data_original = original[var]
     output_name=csv_folder+name+var+".csv"
