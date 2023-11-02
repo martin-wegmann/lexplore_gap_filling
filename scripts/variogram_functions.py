@@ -4,6 +4,7 @@ import gstools as gs
 import numpy as np
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
+import xarray as xr
 
 
 def exp_variogram(data,coords = None, gap_indices=None,  bin_number=None):
@@ -103,5 +104,28 @@ def plot_variograms(bin_center, gamma_obs,gamma_sim_list,title = None,
     ax1.set_xlabel(xlabel)
     ax1.set_ylabel(ylabel)
 
-    
+def subdaily_linear_interp(data_array,times_of_day = 4):
+    """
+    Perform gap-filling linear interpolation between each of the subdaily time periods in the input data array.
+
+    Parameters:
+        data_array (xarray.DataArray): The input data array to be interpolated containing gaps 
+        times_of_day (int) : The number of subdaily time periods in the input data array.
+
+    Returns:
+        xarray.DataArray: The interpolated data array with subdaily values.
+
+    This function divides the input data array into times_of_day subsets, where each subset represents
+    one of the four subdaily time periods. It then performs linear interpolation within each
+    subset along the 'time' dimension and concatenates the results into a single data array.
+    The final data array is sorted by the 'time' dimension.
+
+    """
+    l = []
+    for t in range(times_of_day):
+        d = data_array.isel(time=slice(t, None, 4))
+        l.append(d.interpolate_na(dim='time', method='linear'))
+    subdaily_interpolation = xr.concat(l, dim='time').sortby('time')
+    return subdaily_interpolation
+
     
