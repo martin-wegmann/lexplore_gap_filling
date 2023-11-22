@@ -1,0 +1,21 @@
+# This file contains all the output directories where the processed data is stored by the main running script
+
+#### DO NOT CHANGE THE VARIABLE NAMES ####
+
+g2s_input_folder: "/home/mwegmann/g2s/input_data/"
+
+g2s_output_folder: "/home/mwegmann/g2s/output_data/"
+
+tchain_folder: "/Volumes/lexplore_hd/core_data/thermister-chain/"
+
+thetis_folder: "/Volumes/lexplore_hd/core_data/thetis-multi-instrument-profiler/"
+
+idronaut_folder: "/Volumes/lexplore_hd/core_data/idronaut-automatic-profiler/"
+
+meteo_folder: "/Volumes/lexplore_hd/core_data/meteostation/"
+
+era5_folder: "/Volumes/lexplore_hd/era5/g2s/"
+
+era5_land_folder: "/Volumes/lexplore_hd/era5land/g2s/"
+
+scripts_folder: "/home/mwegmann/g2s/notebooks/"
