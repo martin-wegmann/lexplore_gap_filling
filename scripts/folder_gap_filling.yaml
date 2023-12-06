@@ -2,9 +2,15 @@
 
 #### DO NOT CHANGE THE VARIABLE NAMES ####
 
-g2s_input_folder: "/Volumes/lexplore_hd/g2s_input/"
+g2s_input_folder: "/home/mwegmann/g2s/input_data/"
 
-g2s_output_folder: "/Volumes/lexplore_hd/g2s_output/"
+g2s_output_folder: "/home/mwegmann/g2s/output_data/"
+
+g2s_plot_folder: "/home/mwegmann/g2s/output_data/plots/"
+
+g2s_reconstructions_folder: "/home/mwegmann/g2s/output_data/reconstructions/"
+
+g2s_stats_folder: "/home/mwegmann/g2s/output_data/supp_stats/"
 
 tchain_folder: "/Volumes/lexplore_hd/core_data/thermister-chain/"
 
@@ -18,4 +24,4 @@ era5_folder: "/Volumes/lexplore_hd/era5/g2s/"
 
 era5_land_folder: "/Volumes/lexplore_hd/era5land/g2s/"
 
-scripts_folder: "/Users/mwegmann/"
+scripts_folder: "/home/mwegmann/g2s/notebooks/"
