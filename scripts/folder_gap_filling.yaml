@@ -25,3 +25,8 @@ era5_folder: "/Volumes/lexplore_hd/era5/g2s/"
 era5_land_folder: "/Volumes/lexplore_hd/era5land/g2s/"
 
 scripts_folder: "/home/mwegmann/g2s/notebooks/"
+
+ms_station_folder: "/Volumes/lexplore_hd/ms/order114693/"
+
+ms_cosmo_folder: "/Volumes/lexplore_hd/ms/cosmo/"
+
