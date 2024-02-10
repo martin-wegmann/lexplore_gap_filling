@@ -41,7 +41,7 @@ import statsmodels.api as sm
 def compute_gap_sizes(var):
     """Returns a list containing the size of all gaps in var
     var should be a 1D xarray.DataArray"""
-    if len(var.shape)>1:
+    if len(var.shape)==2:
         var=var.stack(z=("depth", "time"))
     gap_sizes = []
     j = 0
@@ -63,12 +63,15 @@ def compute_gap_sizes(var):
     return np.array(gap_sizes)
 
 def gap_info(var,varname,plot_folder):
+    
+    if len(var.shape)==2:
+        var=var.stack(z=("depth", "time"))
     print(f"{varname} has {np.count_nonzero(np.isnan(var.data))} nans in {var.data.size} data points")
     gap_sizes = compute_gap_sizes(var)
     print(f"{varname} has {np.round(np.count_nonzero(np.isnan(var.data))/var.data.size*100,2)}% missing values")
     print(f"{varname} has {len(gap_sizes)} gaps with {np.median(gap_sizes)} median gap size")
     print(f"{varname} has {len(gap_sizes)} gaps with {np.round(np.mean(gap_sizes),2)} mean gap size")
-    
+
     plt.figure(figsize=(10,4))
     plt.title(f"{np.count_nonzero(np.isnan(var.data))} nans, {len(gap_sizes)} gaps, {np.median(gap_sizes)} median gap size, {np.round(np.mean(gap_sizes),2)} mean gap size, {np.round(np.count_nonzero(np.isnan(var.data))/var.data.size*100,2)}% missing values")
     plt.boxplot(np.array(gap_sizes),vert = False)
@@ -336,7 +339,7 @@ def univ_g2s(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_lis
     
     for run in runs:
         for percent in percent_list:
-            gap_locations,ds24=create_gap_index_nooverlap(da=data_original,gap_percent=percent,gap_length=24)
+            gap_locations,ds24=create_gap_index_nooverlap(da=data_original,gap_percent=percent,gap_length=obs_in_day)
 
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts(da=data_original,gap_locations=gap_locations,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -979,3 +982,452 @@ def generate_simulation_path_wo_gaps(di,max_gap_size):
     sp = np.random.permutation(indices)
     sp[large_gap_indices] = -np.inf
     return sp
+
+def create_gapped_ts_2D(da,gap_locations,depth_level_index,gap_length,selector=1):
+    """This one introduces nans at the gap locations for a certain length""" 
+    # the selector has to be 1 for 24, 2 for 48,3 for 72, 4 for 96 etc
+    print("Amount NAs in orig :"+str(np.isnan(da.values).sum()))
+    
+    len_var=da.data.size
+    print("% NAs in orig :"+str(np.isnan(da.values).sum()/len_var*100))
+    da_new=da.copy()
+    if selector>1:
+        gap_locations=gap_locations[0::selector]
+        depth_level_index=depth_level_index[0::selector]
+    for i in range(len(gap_locations)):
+        gap_location=gap_locations[i]
+        depth_level=depth_level_index[i]
+        da_new.isel(depth=depth_level)[int(gap_location-gap_length/2):int(gap_location+gap_length/2)]=np.nan
+    print("Amount NAs in new :"+str(np.isnan(da_new.values).sum()))
+    print("% NAs in new :"+str(np.isnan(da_new.values).sum()/len_var*100))
+    print("Added % NAs :"+str((np.isnan(da_new.values).sum()-np.isnan(da.values).sum())/len_var*100))
+    return da_new
+
+def create_gap_index_nooverlap_2D(da,gap_percent,gap_length):
+    """Inputs: data array, how many percent of missing data from the data array length we wanna create, length of each gap 
+    Output: A list of random locations where to put the gaps.""" 
+    len_var=da.data.size
+    da_cp=da.copy()
+    nrows=da.data.shape[0]
+    ncols=da.data.shape[1]
+    gap_amount_num=int(np.round(gap_percent/100*len_var)) # aber hier muss len_var schon das bleiben
+    #print("gap amount "+str(gap_amount_num))
+    gap_number=int(np.round(gap_amount_num/gap_length))
+    #print("gap number "+str(gap_number))
+    gap_location=[]
+    depth_level_index=[]
+    for i in range(gap_number):
+       # print("loop")
+        #print(i)
+
+        rand_row=randrange(nrows)
+        # print("row")
+        #print(rand_row)
+
+        da_cp_onelev=da_cp.isel(depth=rand_row)
+        #print("cols")
+        rand_location=randrange(ncols)
+        
+        #print(rand_location)
+        # the 50 is a bit arbitraty, its like 96/2 and some, while 96 being probably our biggest gap we check for
+        # the 48 left and right are also a bit arbitrary, it is basically the biggest gap I wanna check (96)
+        while np.sum(np.isnan(da_cp_onelev[rand_location-30:rand_location+30].values))>0 or rand_location <30 or rand_location >ncols-30:
+
+            rand_row=randrange(nrows)
+            da_cp_onelev=da_cp.isel(depth=rand_row)
+            rand_location=randrange(ncols)
+        gap_location.append(rand_location)
+        depth_level_index.append(rand_row)
+        da_cp.isel(depth=rand_row)[rand_location-int(gap_length/2):rand_location+int(gap_length/2)]=np.nan
+    return gap_location,depth_level_index,da_cp
+
+def plot_MPS_ensembles_2D(original, simulation, year, start_month, end_month, alpha = 0.5, suptitle = None):
+    f1,axes = plt.subplots(original.depth.size,1,figsize = (15,20),sharex = True)
+    plt.subplots_adjust(hspace = 0.3)
+    RMSE = rmse(original.data,simulation.data)
+    plt.suptitle( f"{suptitle}, RMSE = {np.round(RMSE,3)}", y = 0.92, fontsize = 'x-large')
+    for i,d in enumerate(original.depth.data):
+        #original.loc[dict(time = slice(f"{str(year)}-{str(start_month)}",f"{str(year)}-{str(end_month)}"),
+         #                   depth = d)].plot(ax = axes[i])
+        ensemble = simulation.loc[dict(time = slice(f"{str(year)}-{str(start_month)}",f"{str(year)}-{str(end_month)}"),
+                        depth = d)].plot.line(x = 'time',ax = axes[i], color = 'red', alpha = 0.3,add_legend=False)
+        original_plot = original.loc[dict(time = slice(f"{str(year)}-{str(start_month)}",f"{str(year)}-{str(end_month)}"),
+                        depth = d)].plot(ax = axes[i], color = 'blue',add_legend=False)
+        axes[i].set_xlabel(None)
+        axes[i].grid()
+        partial_RMSE = rmse(original.sel({'depth':d}).data,simulation.sel({'depth':d}).data)
+        axes[i].set_title( f"Depth:{d}, RMSE = {np.round(partial_RMSE,3)}")
+    axes[0].legend([ensemble[0],original_plot[0]],[f"{len(ensemble)} QS ensembles","Original data"])
+
+
+
+def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name,depan="linear"):
+    data_original = original[var]
+    output_name=csv_folder+name+var+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+
+    timeofday = data_original.time.dt.hour.values #C
+    runs=np.arange(1,test_runs+1)
+
+    depth_dim, time_dim = data_original.shape
+
+    depth_linear = np.transpose(np.tile(data_original.depth.data,(time_dim,1)))
+    
+    depth_inverse = 1/depth_linear
+
+    # where do we have more than 50% nans
+    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2) # this needs to be changed for IDRONAUT AND THETIS
+    # create the variance over time
+    da_var_depth=data_original.var(dim="time")
+    # where we have more than 50% nans, we dont trust the variance and put missing values
+    da_var_depth[mask_var]=np.nan
+    #we fill these missing values with linear interpolated values
+    da_var_depth["depth"]=da_var_depth["depth"]*-1
+    da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+    da_var_depth_int["depth"]=data_original["depth"]
+
+    depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+
+    if da_var_depth.isnull().sum().values>15:
+        depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
+    
+    for run in runs:
+        for percent in percent_list:
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+
+            for i in range(len(gap_amount_list)):
+                gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
+                
+                sin_calendar = sin_costfunction(time_dim,daily_timesteps = obs_in_day)
+                cos_calendar = cos_costfunction(time_dim,daily_timesteps = obs_in_day)
+                print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+
+                #Univariate gap-filling
+                
+                if depan=="linear":
+                    name_addedinfo="UVl"
+                    ti = np.stack([gapped_data.data, depth_linear],axis = 2)
+                    di = np.stack([gapped_data.data, depth_linear],axis = 2)
+                if depan=="inverse":
+                    name_addedinfo="UVi"
+                    ti = np.stack([gapped_data.data, depth_inverse],axis = 2)
+                    di = np.stack([gapped_data.data, depth_inverse],axis = 2)
+                if depan=="var":
+                    name_addedinfo="UVv"
+                    ti = np.stack([gapped_data.data, depth_variance],axis = 2)
+                    di = np.stack([gapped_data.data, depth_variance],axis = 2)
+                dt = [0,0]
+
+            
+                stacked = ensemble_QS(N = N,
+                                      ti=ti, 
+                                      di=di,
+                                      dt=dt, #Zero for continuous variables
+                                      k=1.2,
+                                      n=50,
+                                      j=0.5,
+                                      ki=None)
+                simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':gapped_data.time})
+                
+                
+                simulations_lin=gapped_data.interpolate_na(dim="time", method="linear")
+                simulations_slin=gapped_data.interpolate_na(dim="time", method="slinear")
+                simulations_akima=gapped_data.interpolate_na(dim="time", method="akima")
+                simulations_spline=gapped_data.interpolate_na(dim="time", method="spline")
+                simulations_quad=gapped_data.interpolate_na(dim="time", method="quadratic")
+                simulations_pchip=gapped_data.interpolate_na(dim="time", method="pchip")
+                simulations_subdlin=subdaily_linear_interp(gapped_data,times_of_day = obs_in_day)
+                
+                error_lin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_lin.data-data_original.data)**2))),4)
+                error_akima = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_akima.data-data_original.data)**2))),4)
+                error_spline = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_spline.data-data_original.data)**2))),4)
+                error_quad = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_quad.data-data_original.data)**2))),4)
+                error_pchip = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_pchip.data-data_original.data)**2))),4)
+                error_subdlin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_subdlin.data-data_original.data)**2))),4)
+                
+                corr_lin=np.round(xr.corr(data_original, simulations_lin, dim="time").mean().values,4)
+                corr_akima=np.round(xr.corr(data_original, simulations_akima, dim="time").mean().values,4)
+                corr_spline=np.round(xr.corr(data_original, simulations_spline, dim="time").mean().values,4)
+                corr_quad=np.round(xr.corr(data_original, simulations_quad, dim="time").mean().values,4)
+                corr_pchip=np.round(xr.corr(data_original, simulations_pchip, dim="time").mean().values,4)
+                corr_subdlin=np.round(xr.corr(data_original, simulations_subdlin, dim="time").mean().values,4)
+
+                corr=np.round(xr.corr(data_original, simulations, dim="time").mean(dim="realizations").mean().values,4)
+                error = np.round(np.nanmean(np.sqrt(np.nanmean((simulations.data-data_original.data)**2))),4)
+                std_ratio=np.round(np.nanmean((data_original/simulations).mean(dim="realizations").mean(dim="time").values),4)
+
+                df_temp = pd.DataFrame([[name_addedinfo,run, N, percent, gap_amount_list[i], corr,corr_lin,corr_akima,corr_spline,corr_quad,corr_pchip,corr_subdlin,error,error_lin,error_akima,error_spline,error_quad,error_pchip,error_subdlin,std_ratio]], columns=df.columns)
+                df = pd.concat([df, df_temp], axis=0)
+                
+                df.to_csv(output_name, index=False)
+                year = 2020
+                start_month = 8 
+                end_month = 9
+                plotting_depth=[-1,-2,-5,-10,-15,-20,-25,-30,-35,-40,-45,-50]
+
+                plot_MPS_ensembles_2D(original = data_original.sel(depth=plotting_depth,method="nearest"),
+                                      simulation = simulations.sel(depth=plotting_depth,method="nearest"),
+                                      year = year,
+                                      start_month = start_month,
+                                      end_month = end_month,
+                                      suptitle = name_addedinfo)
+                plotname=output_folder+name_addedinfo+"run"+str(run)+"N"+str(N)+"pc"+str(percent)+"gap"+str(gap_amount_list[i])
+                plt.savefig(plotname+".pdf")
+                plt.savefig(plotname+".png")
+                plt.show()
+
+
+    return simulations,df
+
+
+def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name,depan="linear"):
+    data_original = original[var]
+    output_name=csv_folder+name+var+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+
+    timeofday = data_original.time.dt.hour.values #C
+    runs=np.arange(1,test_runs+1)
+    
+    depth_dim, time_dim = data_original.shape
+
+    depth_linear = np.transpose(np.tile(data_original.depth.data,(time_dim,1)))
+    
+    depth_inverse = 1/depth_linear
+
+    # where do we have more than 50% nans
+    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2) # this needs to be changed for IDRONAUT AND THETIS
+    # create the variance over time
+    da_var_depth=data_original.var(dim="time")
+    # where we have more than 50% nans, we dont trust the variance and put missing values
+    da_var_depth[mask_var]=np.nan
+    #we fill these missing values with linear interpolated values
+    da_var_depth["depth"]=da_var_depth["depth"]*-1
+    da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+    da_var_depth_int["depth"]=data_original["depth"]
+
+    depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+    
+    if da_var_depth.isnull().sum().values>15:
+        depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
+    
+    for run in runs:
+        for percent in percent_list:
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+
+            for i in range(len(gap_amount_list)):
+                gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
+               
+                sin_calendar = sin_costfunction(time_dim ,daily_timesteps = obs_in_day)
+                cos_calendar = cos_costfunction(time_dim ,daily_timesteps = obs_in_day)
+                print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+
+
+                name_addedinfo="calday"
+                sin_2D = np.tile(sin_calendar, (depth_dim,1))
+                cos_2D = np.tile(cos_calendar, (depth_dim,1))
+                timeofday_2D = np.tile(timeofday, (depth_dim,1))
+
+                if depan=="linear":
+                    name_addedinfo="caldayl"
+                    ti = np.stack([gapped_data.data, depth_linear,sin_2D, cos_2D],axis = 2)
+                    di = np.stack([gapped_data.data, depth_linear,sin_2D, cos_2D],axis = 2)
+                if depan=="inverse":
+                    name_addedinfo="caldayi"
+                    ti = np.stack([gapped_data.data, depth_inverse,sin_2D, cos_2D],axis = 2)
+                    di = np.stack([gapped_data.data, depth_inverse,sin_2D, cos_2D],axis = 2)
+                if depan=="var":
+                    name_addedinfo="caldayv"
+                    ti = np.stack([gapped_data.data, depth_variance,sin_2D, cos_2D],axis = 2)
+                    di = np.stack([gapped_data.data, depth_variance,sin_2D, cos_2D],axis = 2)
+                dt = [0,0,0,0]
+
+                stacked = ensemble_QS(N = N,
+                                      ti=ti, 
+                                      di=di,
+                                      dt=dt, #Zero for continuous variables
+                                      k=1.2,
+                                      n=50,
+                                      j=0.5,
+                                      ki=None)
+
+                simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':gapped_data.time}) 
+                
+                
+                simulations_lin=gapped_data.interpolate_na(dim="time", method="linear")
+                simulations_slin=gapped_data.interpolate_na(dim="time", method="slinear")
+                simulations_akima=gapped_data.interpolate_na(dim="time", method="akima")
+                simulations_spline=gapped_data.interpolate_na(dim="time", method="spline")
+                simulations_quad=gapped_data.interpolate_na(dim="time", method="quadratic")
+                simulations_pchip=gapped_data.interpolate_na(dim="time", method="pchip")
+                simulations_subdlin=subdaily_linear_interp(gapped_data,times_of_day = obs_in_day)
+                
+                error_lin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_lin.data-data_original.data)**2))),4)
+                error_akima = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_akima.data-data_original.data)**2))),4)
+                error_spline = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_spline.data-data_original.data)**2))),4)
+                error_quad = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_quad.data-data_original.data)**2))),4)
+                error_pchip = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_pchip.data-data_original.data)**2))),4)
+                error_subdlin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_subdlin.data-data_original.data)**2))),4)
+                
+                corr_lin=np.round(xr.corr(data_original, simulations_lin, dim="time").mean().values,4)
+                corr_akima=np.round(xr.corr(data_original, simulations_akima, dim="time").mean().values,4)
+                corr_spline=np.round(xr.corr(data_original, simulations_spline, dim="time").mean().values,4)
+                corr_quad=np.round(xr.corr(data_original, simulations_quad, dim="time").mean().values,4)
+                corr_pchip=np.round(xr.corr(data_original, simulations_pchip, dim="time").mean().values,4)
+                corr_subdlin=np.round(xr.corr(data_original, simulations_subdlin, dim="time").mean().values,4)
+
+                corr=np.round(xr.corr(data_original, simulations, dim="time").mean(dim="realizations").mean().values,4)
+                error = np.round(np.nanmean(np.sqrt(np.nanmean((simulations.data-data_original.data)**2))),4)
+                std_ratio=np.round(np.nanmean((data_original/simulations).mean(dim="realizations").mean(dim="time").values),4)
+
+                df_temp = pd.DataFrame([[name_addedinfo,run, N, percent, gap_amount_list[i], corr,corr_lin,corr_akima,corr_spline,corr_quad,corr_pchip,corr_subdlin,error,error_lin,error_akima,error_spline,error_quad,error_pchip,error_subdlin,std_ratio]], columns=df.columns)
+                df = pd.concat([df, df_temp], axis=0)
+                
+                df.to_csv(output_name, index=False)
+                year = 2020
+                start_month = 8 
+                end_month = 9
+                plotting_depth=[-1,-2,-5,-10,-15,-20,-25,-30,-35,-40,-45,-50]
+
+                plot_MPS_ensembles_2D(original = data_original.sel(depth=plotting_depth,method="nearest"),
+                                      simulation = simulations.sel(depth=plotting_depth,method="nearest"),
+                                      year = year,
+                                      start_month = start_month,
+                                      end_month = end_month,
+                                      suptitle = name_addedinfo)
+                plotname=output_folder+name_addedinfo+"run"+str(run)+"N"+str(N)+"pc"+str(percent)+"gap"+str(gap_amount_list[i])
+                plt.savefig(plotname+".pdf")
+                plt.savefig(plotname+".png")
+                plt.show()
+
+
+    return simulations,df
+
+
+def time_of_day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name,depan="linear"):
+    data_original = original[var]
+    output_name=csv_folder+name+var+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+
+    timeofday = data_original.time.dt.hour.values #C
+    runs=np.arange(1,test_runs+1)
+    
+    depth_dim, time_dim = data_original.shape
+
+    depth_linear = np.transpose(np.tile(data_original.depth.data,(time_dim,1)))
+    
+    depth_inverse = 1/depth_linear
+
+    # where do we have more than 50% nans
+    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2) # this needs to be changed for IDRONAUT AND THETIS
+    # create the variance over time
+    da_var_depth=data_original.var(dim="time")
+    # where we have more than 50% nans, we dont trust the variance and put missing values
+    da_var_depth[mask_var]=np.nan
+    #we fill these missing values with linear interpolated values
+    da_var_depth["depth"]=da_var_depth["depth"]*-1
+    da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+    da_var_depth_int["depth"]=data_original["depth"]
+
+    depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+    
+    if da_var_depth.isnull().sum().values>15:
+        depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
+    
+    for run in runs:
+        for percent in percent_list:
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+
+            for i in range(len(gap_amount_list)):
+                gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
+                
+                sin_calendar = sin_costfunction(time_dim ,daily_timesteps = obs_in_day)
+                cos_calendar = cos_costfunction(time_dim ,daily_timesteps = obs_in_day)
+                print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+
+
+                name_addedinfo="caldaytimeday"
+                sin_2D = np.tile(sin_calendar, (depth_dim,1))
+                cos_2D = np.tile(cos_calendar, (depth_dim,1))
+                timeofday_2D = np.tile(timeofday, (depth_dim,1))
+
+                if depan=="linear":
+                    name_addedinfo="caldaytimedayl"
+                    ti = np.stack([gapped_data.data, depth_linear,sin_2D, cos_2D,timeofday_2D],axis = 2)
+                    di = np.stack([gapped_data.data, depth_linear,sin_2D, cos_2D,timeofday_2D],axis = 2)
+                if depan=="inverse":
+                    name_addedinfo="caldaytimedayi"
+                    ti = np.stack([gapped_data.data, depth_inverse,sin_2D, cos_2D,timeofday_2D],axis = 2)
+                    di = np.stack([gapped_data.data, depth_inverse,sin_2D, cos_2D,timeofday_2D],axis = 2)
+                if depan=="var":
+                    name_addedinfo="caldaytimedayv"
+                    ti = np.stack([gapped_data.data, depth_variance,sin_2D, cos_2D,timeofday_2D],axis = 2)
+                    di = np.stack([gapped_data.data, depth_variance,sin_2D, cos_2D,timeofday_2D],axis = 2)
+                dt = [0,0,0,0,1]
+
+                stacked = ensemble_QS(N = N,
+                                      ti=ti, 
+                                      di=di,
+                                      dt=dt, #Zero for continuous variables
+                                      k=1.2,
+                                      n=50,
+                                      j=0.5,
+                                      ki=None)
+
+                simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':gapped_data.time}) 
+                
+                
+                simulations_lin=gapped_data.interpolate_na(dim="time", method="linear")
+                simulations_slin=gapped_data.interpolate_na(dim="time", method="slinear")
+                simulations_akima=gapped_data.interpolate_na(dim="time", method="akima")
+                simulations_spline=gapped_data.interpolate_na(dim="time", method="spline")
+                simulations_quad=gapped_data.interpolate_na(dim="time", method="quadratic")
+                simulations_pchip=gapped_data.interpolate_na(dim="time", method="pchip")
+                simulations_subdlin=subdaily_linear_interp(gapped_data,times_of_day = obs_in_day)
+                
+                error_lin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_lin.data-data_original.data)**2))),4)
+                error_akima = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_akima.data-data_original.data)**2))),4)
+                error_spline = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_spline.data-data_original.data)**2))),4)
+                error_quad = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_quad.data-data_original.data)**2))),4)
+                error_pchip = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_pchip.data-data_original.data)**2))),4)
+                error_subdlin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_subdlin.data-data_original.data)**2))),4)
+                
+                corr_lin=np.round(xr.corr(data_original, simulations_lin, dim="time").mean().values,4)
+                corr_akima=np.round(xr.corr(data_original, simulations_akima, dim="time").mean().values,4)
+                corr_spline=np.round(xr.corr(data_original, simulations_spline, dim="time").mean().values,4)
+                corr_quad=np.round(xr.corr(data_original, simulations_quad, dim="time").mean().values,4)
+                corr_pchip=np.round(xr.corr(data_original, simulations_pchip, dim="time").mean().values,4)
+                corr_subdlin=np.round(xr.corr(data_original, simulations_subdlin, dim="time").mean().values,4)
+
+                corr=np.round(xr.corr(data_original, simulations, dim="time").mean(dim="realizations").mean().values,4)
+                error = np.round(np.nanmean(np.sqrt(np.nanmean((simulations.data-data_original.data)**2))),4)
+                std_ratio=np.round(np.nanmean((data_original/simulations).mean(dim="realizations").mean(dim="time").values),4)
+
+                df_temp = pd.DataFrame([[name_addedinfo,run, N, percent, gap_amount_list[i], corr,corr_lin,corr_akima,corr_spline,corr_quad,corr_pchip,corr_subdlin,error,error_lin,error_akima,error_spline,error_quad,error_pchip,error_subdlin,std_ratio]], columns=df.columns)
+                df = pd.concat([df, df_temp], axis=0)
+                
+                df.to_csv(output_name, index=False)
+                year = 2020
+                start_month = 8 
+                end_month = 9
+                plotting_depth=[-1,-2,-5,-10,-15,-20,-25,-30,-35,-40,-45,-50]
+
+                plot_MPS_ensembles_2D(original = data_original.sel(depth=plotting_depth,method="nearest"),
+                                      simulation = simulations.sel(depth=plotting_depth,method="nearest"),
+                                      year = year,
+                                      start_month = start_month,
+                                      end_month = end_month,
+                                      suptitle = name_addedinfo)
+                plotname=output_folder+name_addedinfo+"run"+str(run)+"N"+str(N)+"pc"+str(percent)+"gap"+str(gap_amount_list[i])
+                plt.savefig(plotname+".pdf")
+                plt.savefig(plotname+".png")
+                plt.show()
+
+
+    return simulations,df
+
