@@ -11,3 +11,6 @@ change yaml location in the execution script here:
 
 with open(r"/home/martinw/gapfill/notebooks/folder_gap_filling_giub.yaml", "r") as f:
     directories = yaml.load(f, Loader=yaml.FullLoader)
+
+
+All the data you need are in the folder data_input_for_gapfilling
