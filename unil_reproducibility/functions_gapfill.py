@@ -266,6 +266,7 @@ def ensemble_QS(N,**args):
     """Inputs: no. of ensemble runs N and QS arguments
     Mandatory and optional parameters same as in QS"""
     simulation_list = []
+    index_list = []
     args={k: v for k, v in args.items() if v is not None}
     
     if args['ti'].ndim !=1:
@@ -277,9 +278,11 @@ def ensemble_QS(N,**args):
         if args['ti'].ndim!=1:
             simulation = undo_normalize_image(simulation,di_scaler)
         simulation_list.append(simulation)
+        index_list.append(index)
     simulations_stack = np.stack(simulation_list)
+    index_stack = np.stack(index_list)
     
-    return simulations_stack
+    return simulations_stack,index_stack
 
 def unify_time_axis(da1,da2):
     if np.max(da1.time.values)>np.max(da2.time.values):
@@ -1121,7 +1124,7 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
                 dt = [0,0]
 
             
-                stacked = ensemble_QS(N = N,
+                stacked,indices_stacked = ensemble_QS(N = N,
                                       ti=ti, 
                                       di=di,
                                       dt=dt, #Zero for continuous variables
@@ -1130,7 +1133,10 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
                                       j=0.5,
                                       ki=None)
                 simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':gapped_data.time})
-                
+                indices = xr.DataArray(data =indices_stacked,
+                                       coords = {'realizations':np.arange(1,indices_stacked.shape[0]+1),
+                                                 'depth':data_original.depth.data,'time':gapped_data.time})
+
                 
                 simulations_lin=gapped_data.interpolate_na(dim="time", method="linear")
                 simulations_slin=gapped_data.interpolate_na(dim="time", method="slinear")
@@ -1179,7 +1185,7 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
                 plt.show()
 
 
-    return simulations,df
+    return simulations,df,indices
 
 
 def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name,depan="linear"):
@@ -1245,7 +1251,7 @@ def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,se
                     di = np.stack([gapped_data.data, depth_variance,sin_2D, cos_2D],axis = 2)
                 dt = [0,0,0,0]
 
-                stacked = ensemble_QS(N = N,
+                stacked, indices_stacked  = ensemble_QS(N = N,sa = 'tesla-k20c.gaia.unil.ch',
                                       ti=ti, 
                                       di=di,
                                       dt=dt, #Zero for continuous variables
@@ -1254,8 +1260,12 @@ def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,se
                                       j=0.5,
                                       ki=None)
 
-                simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':gapped_data.time}) 
-                
+                simulations = xr.DataArray(data =stacked[:,:,:,0],
+                                           coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':gapped_data.time}) 
+                indices = xr.DataArray(data =indices_stacked,
+                                       coords = {'realizations':np.arange(1,indices_stacked.shape[0]+1),
+                                                 'depth':data_original.depth.data,'time':gapped_data.time})
+
                 
                 simulations_lin=gapped_data.interpolate_na(dim="time", method="linear")
                 simulations_slin=gapped_data.interpolate_na(dim="time", method="slinear")
@@ -1304,7 +1314,7 @@ def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,se
                 plt.show()
 
 
-    return simulations,df
+    return simulations,df, indices
 
 
 def time_of_day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name,depan="linear"):

@@ -224,8 +224,55 @@ print(datetime.datetime.now())
 #tchain, linear depth pen
 
 
-filled_data,error_df=univ_g2s_2D(original=tchain,var=varname,obs_in_day=timestepsinday,N=N,percent_list=percent_list,gap_amount_list=gap_amount_list,selector_list=selector_list,test_runs=test_runs,df=df,csv_folder=output_folder,name="tchain_eval_",depan="linear")
+filled_data,error_df,indices=univ_g2s_2D(original=tchain,
+                                 var=varname
+                                 ,obs_in_day=timestepsinday,
+                                 N=N,percent_list=percent_list,
+                                 gap_amount_list=gap_amount_list,
+                                 selector_list=selector_list,
+                                 test_runs=test_runs,
+                                 df=df,
+                                 csv_folder=output_folder,
+                                 name="tchain_eval_",
+                                 depan="linear")
 
+
+def plot_filled_vs_indices(filled_data,indices, depth, realization, error_threshold = 0.5):
+    index = indices.sel(depth=depth, realizations=realization)
+    index = xr.where(index == 0 , np.nan, index)
+
+    error = (filled_data - tchain['temp']).sel(depth =   depth, realizations = realization)
+    high_errormask = np.abs(error) >error_threshold
+    
+    filled = filled_data.sel(depth=depth, realizations=realization)
+    orig = tchain['temp'].sel(depth=depth)
+
+    high_error_indices = index.where(high_errormask)
+
+
+    f, (ax1,ax2) = plt.subplots(2,1,figsize=(10,10),sharex = True)
+    filled.plot(ax = ax1, label = 'Filled')
+    orig.plot(ax = ax1, label = 'Original')
+    ax1.legend()
+    ax1.set_title('Simulated vs Observed ')
+    ax1.grid()
+
+    #plot the index as points without lines
+    index.plot(ax = ax2, marker = 'o', linestyle = 'none',label = 'Filled index')
+    #Red crosses for the indices with high errors, for those we are most interested where they come from
+    high_error_indices.plot(ax = ax2, marker = 'x', linestyle = 'none', color = 'red',
+                            label = f"Error > {error_threshold}")
+    ax2.set_ylabel('Original index of filled values')
+    ax2.grid()
+    ax2.legend()
+    plt.show()
+
+depth = -1.0
+realization = 1
+
+plot_filled_vs_indices(filled_data,
+                       indices,
+                         depth, realization)
 
 # In[27]:
 
