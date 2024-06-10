@@ -2178,3 +2178,40 @@ def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,se
     
     
     return simulations,df
+    
+def generate_simulation_path_wo_gaps_2D(di,max_gap_size):
+    #Identify location of the large gaps
+    all_gap_indices,list_of_lists = find_large_nan_gaps_2D(di,max_gap_size)
+    empty_matrix=np.zeros_like(gapped_data.values)
+    for i in range(len(list_of_lists)):
+        large_gap_indices=list_of_lists[i]
+        #Start with a linear simulation path 
+        indices = np.arange(di.shape[1],dtype = float)
+        #Take out the large gaps, -inf in the simulation path are skipped (np.nans are automatically filled)
+        #indices[large_gap_indices] = -np.inf # Somehow this doesn't work 
+        #Shuffle around the indices to create a random path first with and then without the large gaps
+        sp = np.random.permutation(indices)
+        sp[large_gap_indices] = -np.inf
+        empty_matrix[i,:]=sp
+    return empty_matrix
+
+def find_large_nan_gaps_2D(arr, N):
+    list_of_lists=[]
+    for i in range(arr.shape[0]):
+        arr_onedepth=arr.isel(depth=i)
+        # Find indices where arr is not np.nan
+        nan_indices = np.where(~np.isnan(arr_onedepth))[0]
+        # Calculate the gaps between NaNs
+        nan_gaps = np.diff(nan_indices) - 1
+        # Find indices where nan_gaps are larger than N
+        large_gap_indices = np.where(nan_gaps > N)[0]
+        # Initialize a list to store all the indices within large gaps
+        all_gap_indices = []
+        for gap_index in large_gap_indices:
+            gap_start = nan_indices[gap_index] + 1  
+            gap_end = nan_indices[gap_index + 1]    
+            gap_indices = np.arange(gap_start, gap_end)
+            all_gap_indices.extend(gap_indices.tolist())
+        list_of_lists.append(all_gap_indices)
+    return all_gap_indices,list_of_lists  
+    
