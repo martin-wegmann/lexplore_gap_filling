@@ -1072,8 +1072,8 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
     print("metrics saved to: "+output_name)
     if os.path.exists(output_name):
         df=pd.read_csv(output_name)
-
-    timeofday = data_original.time.dt.hour.values #C
+    
+    timeofday = data_original.time.dt.hour.values
     runs=np.arange(1,test_runs+1)
 
     depth_dim, time_dim = data_original.shape
@@ -1082,18 +1082,54 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
     
     depth_inverse = 1/depth_linear
 
-    # where do we have more than 50% nans
-    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2) # this needs to be changed for IDRONAUT AND THETIS
-    # create the variance over time
+    # where do we have more than 50% nans. this needs to be change for idronaut and thetis
+    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2)
+    # statistics over time
     da_var_depth=data_original.var(dim="time")
+    da_sd_depth=data_original.std(dim="time")
+    da_mean_depth=data_original.mean(dim="time")
+    da_median_depth=data_original.median(dim="time")
+    da_max_depth=data_original.max(dim="time")
     # where we have more than 50% nans, we dont trust the variance and put missing values
     da_var_depth[mask_var]=np.nan
+    da_sd_depth[mask_var]=np.nan
+    da_mean_depth[mask_var]=np.nan
+    da_median_depth[mask_var]=np.nan
+    da_max_depth[mask_var]=np.nan
     #we fill these missing values with linear interpolated values
     da_var_depth["depth"]=da_var_depth["depth"]*-1
     da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
     da_var_depth_int["depth"]=data_original["depth"]
 
     depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+
+    da_sd_depth["depth"]=da_sd_depth["depth"]*-1
+    da_sd_depth_int=da_sd_depth.interpolate_na(dim="depth", method="linear")
+    da_sd_depth_int["depth"]=data_original["depth"]
+
+    depth_std=np.transpose(np.tile(da_sd_depth_int.data,(time_dim,1)))
+
+    da_mean_depth["depth"]=da_mean_depth["depth"]*-1
+    da_mean_depth_int=da_mean_depth.interpolate_na(dim="depth", method="linear")
+    da_mean_depth_int["depth"]=data_original["depth"]
+
+    depth_mean=np.transpose(np.tile(da_mean_depth_int.data,(time_dim,1)))
+
+    da_max_depth["depth"]=da_max_depth["depth"]*-1
+    da_max_depth_int=da_max_depth.interpolate_na(dim="depth", method="linear")
+    da_max_depth_int["depth"]=data_original["depth"]
+
+    depth_max=np.transpose(np.tile(da_max_depth_int.data,(time_dim,1)))
+
+    da_median_depth["depth"]=da_median_depth["depth"]*-1
+    da_median_depth_int=da_median_depth.interpolate_na(dim="depth", method="linear")
+    da_median_depth_int["depth"]=data_original["depth"]
+
+    depth_median=np.transpose(np.tile(da_median_depth_int.data,(time_dim,1)))
+
+
+
+
 
     if da_var_depth.isnull().sum().values>15:
         depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
@@ -1123,6 +1159,22 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
                     name_addedinfo="UVv"
                     ti = np.stack([gapped_data.data, depth_variance],axis = 2)
                     di = np.stack([gapped_data.data, depth_variance],axis = 2)
+                if depan=="std":
+                    name_addedinfo="UVs"
+                    ti = np.stack([gapped_data.data, depth_std],axis = 2)
+                    di = np.stack([gapped_data.data, depth_std],axis = 2)
+                if depan=="max":
+                    name_addedinfo="UVx"
+                    ti = np.stack([gapped_data.data, depth_max],axis = 2)
+                    di = np.stack([gapped_data.data, depth_max],axis = 2)
+                if depan=="mean":
+                    name_addedinfo="UVm"
+                    ti = np.stack([gapped_data.data, depth_mean],axis = 2)
+                    di = np.stack([gapped_data.data, depth_mean],axis = 2)
+                if depan=="median":
+                    name_addedinfo="UVd"
+                    ti = np.stack([gapped_data.data, depth_median],axis = 2)
+                    di = np.stack([gapped_data.data, depth_median],axis = 2)
                 dt = [0,0]
 
             
