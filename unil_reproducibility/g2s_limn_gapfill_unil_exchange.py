@@ -315,3 +315,33 @@ print(datetime.datetime.now())
 #tchain, best depth penal, idronaut
 #tchain, best depth penal, best1, best2,
 
+
+
+
+
+
+
+
+
+############################################## June 2024
+# code to reproduce variogram results
+
+# note that the selection of depths is hard coded into day_of_year_g2s_2D() and not a choice to be made here.
+# to change that you can jump into functions_gapfill.py and change things there. Just please dont push the changes. Or if you push, then create a new function. 
+# the performance statistics are then found in "tchain_season_temp.csv"
+
+
+percent_list=[5,10,15]
+gap_amount_list=[8,16,24,32,40,48]
+selector_list=[1,2,3,4,5,6]
+N = 25
+test_runs=5
+
+columns_df=["NAME",'RUN',"MEMBER","PERC","GAP_SIZE","CORR","CORR_lin","CORR_akima","CORR_spline","CORR_quad","CORR_pchip","CORR_subdlin","RMSE","RMSE_lin","RMSE_akima","RMSE_spline","RMSE_quad","RMSE_pchip","RMSE_subdlin","RMSE_VAR_mean","RMSE_VAR_median","RMSE_VAR_lin","RMSE_VAR_akima","RMSE_VAR_spline","RMSE_VAR_quad","VAR_pchip","RMSE_VAR_subdlin","STDR","DEPTH"]
+
+df = pd.DataFrame(columns=columns_df)
+
+
+filled_data,error_df=day_of_year_g2s_2D(original=tchain,var=varname,obs_in_day=timestepsinday,N=N,percent_list=percent_list,gap_amount_list=gap_amount_list,selector_list=selector_list,test_runs=test_runs,df=df,csv_folder=output_folder,plot_folder=plots_folder,name="tchain_season_",depan="var")
+#
+
