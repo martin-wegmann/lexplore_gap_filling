@@ -266,20 +266,24 @@ def ensemble_QS(N,**args):
     """Inputs: no. of ensemble runs N and QS arguments
     Mandatory and optional parameters same as in QS"""
     simulation_list = []
+    index_list = []
     args={k: v for k, v in args.items() if v is not None}
     
-    if args['ti'].ndim !=1:
+    if len(args['dt'])>1:
+        #Normalize to make sure all variables are in the same range
         args['ti'],ti_scaler = normalize_image(args['ti'])
         args['di'],di_scaler = normalize_image(args['di'])
     
     for i in range(N):
         simulation,index,time,progress,jobid = g2s(a='qs',**args);
-        if args['ti'].ndim!=1:
+        if len(args['dt'])>1:
             simulation = undo_normalize_image(simulation,di_scaler)
         simulation_list.append(simulation)
+        index_list.append(index)
     simulations_stack = np.stack(simulation_list)
+    index_stack = np.stack(index_list)
     
-    return simulations_stack
+    return simulations_stack,index_stack
 
 def unify_time_axis(da1,da2):
     if np.max(da1.time.values)>np.max(da2.time.values):
@@ -962,6 +966,11 @@ def subdaily_linear_interp(data_array,times_of_day = 4):
 def find_large_nan_gaps(arr, N):
     # Find indices where arr is not np.nan
     nan_indices = np.where(~np.isnan(arr))[0]
+    #Make sure gaps at the start and end are also considered
+    if nan_indices[0]!=[0]:
+        nan_indices=np.insert(nan_indices,0,0)
+    if nan_indices[-1]!=arr.size-1:
+        nan_indices=np.append(nan_indices,arr.size-1)
     # Calculate the gaps between NaNs
     nan_gaps = np.diff(nan_indices) - 1
     # Find indices where nan_gaps are larger than N
@@ -976,15 +985,27 @@ def find_large_nan_gaps(arr, N):
     return all_gap_indices  
 
 def generate_simulation_path_wo_gaps(di,max_gap_size):
-    #Identify location of the large gaps
-    large_gap_indices = find_large_nan_gaps(di,max_gap_size)
-    #Start with a linear simulation path 
-    indices = np.arange(di.size,dtype = float)
-    #Take out the large gaps, -inf in the simulation path are skipped (np.nans are automatically filled)
-    #indices[large_gap_indices] = -np.inf # Somehow this doesn't work 
-    #Shuffle around the indices to create a random path first with and then without the large gaps
-    sp = np.random.permutation(indices)
-    sp[large_gap_indices] = -np.inf
+    if len(di.shape)==1:
+        #Identify location of the large gaps
+        large_gap_indices = find_large_nan_gaps(di,max_gap_size)
+        #Start with a linear simulation path 
+        indices = np.arange(di.size,dtype = float)
+        #Take out the large gaps, -inf in the simulation path are skipped (np.nans are automatically filled)
+        #indices[large_gap_indices] = -np.inf # Somehow this doesn't work 
+        #Shuffle around the indices to create a random path first with and then without the large gaps
+        sp = np.random.permutation(indices)
+        sp[large_gap_indices] = -np.inf
+    elif len(di.shape) ==2:
+        #when it's 2D, first generate the path in the flattened array, then reshape it to 2D and remove large gaps per depth
+        # Then flatten back to 1D
+        indices = np.arange(di.flatten().size,dtype = float)
+        sp = np.random.permutation(indices)
+        sp = sp.reshape(di.shape)
+        for i in range(di.shape[0]):
+            large_gap_indices = find_large_nan_gaps(di[i],max_gap_size)
+            sp[i,large_gap_indices] = -np.inf
+    else:
+        print("ERROR: Data array has more than 2 dimensions")
     return sp
 
 def create_gapped_ts_2D(da,gap_locations,depth_level_index,gap_length,selector=1):
@@ -1066,7 +1087,8 @@ def plot_MPS_ensembles_2D(original, simulation, year, start_month, end_month, al
 
 
 
-def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name,depan="linear"):
+def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name,depan="linear",
+                max_gap_size = None):
     data_original = original[var]
     output_name=csv_folder+name+var+".csv"
     print("metrics saved to: "+output_name)
@@ -1177,17 +1199,30 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
                     di = np.stack([gapped_data.data, depth_median],axis = 2)
                 dt = [0,0]
 
-            
-                stacked = ensemble_QS(N = N,
-                                      ti=ti, 
-                                      di=di,
-                                      dt=dt, #Zero for continuous variables
-                                      k=1.2,
-                                      n=50,
-                                      j=0.5,
-                                      ki=None)
-                simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':gapped_data.time})
+                print(ti.shape,di.shape)
+                if max_gap_size !=None:
+                    sp = generate_simulation_path_wo_gaps(di[:,:,0],max_gap_size=max_gap_size)
+                else:
+                    sp = None
+                stacked, indices_stacked = ensemble_QS(N = N,
+                                    sa = 'tesla-k20c.gaia.unil.ch',
+                                    ti=ti, 
+                                    di=di,
+                                    dt=dt, #Zero for continuous variables
+                                    k=1.2,
+                                    n=50,
+                                    j=0.5,
+                                    ki=np.ones([100,100]),
+                                    sp = sp)
                 
+                print(stacked.shape, "stacked shape")
+                print(np.arange(1,stacked.shape[0]+1))
+                print(gapped_data.time, "gapped_data.time")
+                simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':gapped_data.time})
+                indices = xr.DataArray(data =indices_stacked,
+                                       coords = {'realizations':np.arange(1,indices_stacked.shape[0]+1),
+                                                 'depth':data_original.depth.data,'time':gapped_data.time})
+
                 
                 simulations_lin=gapped_data.interpolate_na(dim="time", method="linear")
                 simulations_slin=gapped_data.interpolate_na(dim="time", method="slinear")
@@ -1236,7 +1271,7 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
                 plt.show()
 
 
-    return simulations,df
+    return simulations,df,indices
 
 
 def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_list,test_runs,df,csv_folder,name,depan="linear"):
@@ -2230,40 +2265,4 @@ def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,se
     
     
     return simulations,df
-    
-def generate_simulation_path_wo_gaps_2D(di,max_gap_size):
-    #Identify location of the large gaps
-    all_gap_indices,list_of_lists = find_large_nan_gaps_2D(di,max_gap_size)
-    empty_matrix=np.zeros_like(gapped_data.values)
-    for i in range(len(list_of_lists)):
-        large_gap_indices=list_of_lists[i]
-        #Start with a linear simulation path 
-        indices = np.arange(di.shape[1],dtype = float)
-        #Take out the large gaps, -inf in the simulation path are skipped (np.nans are automatically filled)
-        #indices[large_gap_indices] = -np.inf # Somehow this doesn't work 
-        #Shuffle around the indices to create a random path first with and then without the large gaps
-        sp = np.random.permutation(indices)
-        sp[large_gap_indices] = -np.inf
-        empty_matrix[i,:]=sp
-    return empty_matrix
-
-def find_large_nan_gaps_2D(arr, N):
-    list_of_lists=[]
-    for i in range(arr.shape[0]):
-        arr_onedepth=arr.isel(depth=i)
-        # Find indices where arr is not np.nan
-        nan_indices = np.where(~np.isnan(arr_onedepth))[0]
-        # Calculate the gaps between NaNs
-        nan_gaps = np.diff(nan_indices) - 1
-        # Find indices where nan_gaps are larger than N
-        large_gap_indices = np.where(nan_gaps > N)[0]
-        # Initialize a list to store all the indices within large gaps
-        all_gap_indices = []
-        for gap_index in large_gap_indices:
-            gap_start = nan_indices[gap_index] + 1  
-            gap_end = nan_indices[gap_index + 1]    
-            gap_indices = np.arange(gap_start, gap_end)
-            all_gap_indices.extend(gap_indices.tolist())
-        list_of_lists.append(all_gap_indices)
-    return all_gap_indices,list_of_lists  
     
