@@ -965,21 +965,23 @@ def subdaily_linear_interp(data_array,times_of_day = 4):
 
 def find_large_nan_gaps(arr, N):
     # Find indices where arr is not np.nan
-    nan_indices = np.where(~np.isnan(arr))[0]
+    real_indices = np.where(~np.isnan(arr))[0]
     #Make sure gaps at the start and end are also considered
-    if nan_indices[0]!=[0]:
-        nan_indices=np.insert(nan_indices,0,0)
-    if nan_indices[-1]!=arr.size-1:
-        nan_indices=np.append(nan_indices,arr.size-1)
+    if real_indices[0]!=[0]:
+        real_indices=np.insert(real_indices,0,-1)
+    if real_indices[-1]!=arr.size-1:
+        real_indices=np.append(real_indices,arr.size)
     # Calculate the gaps between NaNs
-    nan_gaps = np.diff(nan_indices) - 1
+    nan_gaps = np.diff(real_indices) - 1
     # Find indices where nan_gaps are larger than N
     large_gap_indices = np.where(nan_gaps > N)[0]
     # Initialize a list to store all the indices within large gaps
     all_gap_indices = []
     for gap_index in large_gap_indices:
-        gap_start = nan_indices[gap_index] + 1  
-        gap_end = nan_indices[gap_index + 1]    
+        #Take the first nan of the gap
+        gap_start = real_indices[gap_index] + 1  
+        #Take the first value after the gap
+        gap_end = real_indices[gap_index+1]    
         gap_indices = np.arange(gap_start, gap_end)
         all_gap_indices.extend(gap_indices.tolist())
     return all_gap_indices  
