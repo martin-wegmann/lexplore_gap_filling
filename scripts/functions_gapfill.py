@@ -1007,7 +1007,7 @@ def create_gapped_ts_2D(da,gap_locations,depth_level_index,gap_length,selector=1
     print("Added % NAs :"+str((np.isnan(da_new.values).sum()-np.isnan(da.values).sum())/len_var*100))
     return da_new
 
-def create_gap_index_nooverlap_2D(da,gap_percent,gap_length):
+def create_gap_index_nooverlap_2D(da,gap_percent,gap_length,gap_amount):
     """Inputs: data array, how many percent of missing data from the data array length we wanna create, length of each gap 
     Output: A list of random locations where to put the gaps.""" 
     len_var=da.data.size
@@ -1032,10 +1032,12 @@ def create_gap_index_nooverlap_2D(da,gap_percent,gap_length):
         #print("cols")
         rand_location=randrange(ncols)
         
+        buffer=int(max(gap_amount)/2)
+        
         #print(rand_location)
         # 24 because the max gap we look at is 48 tine steps. if it would be more than 48 time steps, this would need to be changed
         # this code crashes if it does not find suitable gaps
-        while np.sum(np.isnan(da_cp_onelev[rand_location-24:rand_location+24].values))>0 or rand_location <24 or rand_location >ncols-24:
+        while np.sum(np.isnan(da_cp_onelev[rand_location-buffer:rand_location+buffer].values))>0 or rand_location <buffer or rand_location >ncols-buffer:
 
             rand_row=randrange(nrows)
             print("looking for suitable gaps")
@@ -1140,7 +1142,7 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
     
     for run in runs:
         for percent in percent_list:
-            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day,gap_amount=gap_amount_list)
 
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -1277,7 +1279,7 @@ def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,se
     
     for run in runs:
         for percent in percent_list:
-            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day,gap_amount=gap_amount_list)
 
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -1402,7 +1404,7 @@ def time_of_day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount
     
     for run in runs:
         for percent in percent_list:
-            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day,gap_amount=gap_amount_list)
 
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -1531,7 +1533,7 @@ def one_cov_g2s_2D(original,var1,cov,var2,cov_name,obs_in_day,N,percent_list,gap
     
     for run in runs:
         for percent in percent_list:
-            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day,gap_amount=gap_amount_list)
 
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -1662,7 +1664,7 @@ def one_cov_g2s_2D_test(original,var1,cov,var2,cov_name,obs_in_day,N,percent_lis
     
     for run in runs:
         for percent in percent_list:
-            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day,gap_amount=gap_amount_list)
     
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -1855,7 +1857,7 @@ def day_of_year_g2s_2D_test(original,var,obs_in_day,N,percent_list,gap_amount_li
     
     for run in runs:
         for percent in percent_list:
-            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day,gap_amount=gap_amount_list)
     
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
@@ -2090,7 +2092,7 @@ def day_of_year_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,se
     
     for run in runs:
         for percent in percent_list:
-            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day)
+            gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day,gap_amount=gap_amount_list)
     
             for i in range(len(gap_amount_list)):
                 gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list[i],selector=selector_list[i])
