@@ -239,7 +239,7 @@ for single_depth in depth_array:
 	
 	print("now computing variogram")
 	print(datetime.datetime.now())
-	bin_centers,gamma_obs, gamma_sim_list = compare_variograms(data_original,
+	bin_centers,gamma_obs, gamma_sim_list = compare_variograms_nothreads(data_original,
 	  sims, 
 	   gap_indices = None,
 	  bin_number = int(96/int(bin_corrector)))
