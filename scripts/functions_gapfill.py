@@ -2632,9 +2632,9 @@ def day_of_year_g2s_2D_3layer_rec(data_original,var,obs_in_day,max_timesteps,N,s
         dt = [0,0,0]
         print("isel depth is "+str(depth))
         if sp==True:
-            sp=generate_simulation_path_wo_gaps(data_3layer.values,max_timesteps)
+            sp_traces=generate_simulation_path_wo_gaps(data_3layer.values,max_timesteps)
             print("hello")
-            simulations_stack,index_stack = ensemble_QS(N = N,sp=sp,
+            simulations_stack,index_stack = ensemble_QS(N = N,sp=sp_traces,
                                   ti=ti,
                                   di=di,
                                   dt=dt, #Zero for continuous variables
@@ -2651,10 +2651,10 @@ def day_of_year_g2s_2D_3layer_rec(data_original,var,obs_in_day,max_timesteps,N,s
                                   n=50,
                                   j=0.4,
                                   ki=None)
-        simulations = xr.DataArray(data =simulations_stack[:,:,:,0],coords = {'realizations':np.arange(1,simulations_stack.shape[0]+1),'depth':data_3layer.depth.data,'time':gapped_data_3layer.time})
+        simulations = xr.DataArray(data =simulations_stack[:,:,:,0],coords = {'realizations':np.arange(1,simulations_stack.shape[0]+1),'depth':data_3layer.depth.data,'time':data_3layer.time})
         xr_alllayers.append(simulations)
         xr_onelayer.append(simulations.isel(depth=1))
     full_rec=xr.concat(xr_onelayer,"depth")
         
 
-    return xr_layers,full_rec
+    return xr_alllayers,full_rec
