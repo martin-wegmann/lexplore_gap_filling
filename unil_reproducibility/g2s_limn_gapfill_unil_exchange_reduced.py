@@ -164,9 +164,12 @@ percent=5
 obs_in_day=timestepsinday
 
 
-gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,gap_percent=percent,gap_length=obs_in_day,gap_amount=gap_amount_list)
+gap_locations,depth_level_indices,ds24=create_gap_index_nooverlap_2D(da=data_original,
+			gap_percent=percent,gap_length=obs_in_day,gap_amount=gap_amount_list)
 
-gapped_data=create_gapped_ts_2D(da=data_original,gap_locations=gap_locations,depth_level_index=depth_level_indices,gap_length=gap_amount_list,selector=selector_list)
+gapped_data=create_gapped_ts_2D(da=data_original,
+gap_locations=gap_locations,depth_level_index=depth_level_indices,
+gap_length=gap_amount_list[0],selector=selector_list[0])
 
 # #### reconstruction phase
 
