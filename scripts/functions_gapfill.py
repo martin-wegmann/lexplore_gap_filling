@@ -1122,35 +1122,41 @@ def univ_g2s_2D(original,var,obs_in_day,N,percent_list,gap_amount_list,selector_
     da_median_depth[mask_var]=np.nan
     da_max_depth[mask_var]=np.nan
     #we fill these missing values with linear interpolated values
-    da_var_depth["depth"]=da_var_depth["depth"]*-1
-    da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
-    da_var_depth_int["depth"]=data_original["depth"]
+    if depan=="var":
+    	da_var_depth["depth"]=da_var_depth["depth"]*-1
+    	da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+    	da_var_depth_int["depth"]=data_original["depth"]
 
-    depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+    	depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+    	
+    if depan=="std":
+    	da_sd_depth["depth"]=da_sd_depth["depth"]*-1
+    	da_sd_depth_int=da_sd_depth.interpolate_na(dim="depth", method="linear")
+    	da_sd_depth_int["depth"]=data_original["depth"]
 
-    da_sd_depth["depth"]=da_sd_depth["depth"]*-1
-    da_sd_depth_int=da_sd_depth.interpolate_na(dim="depth", method="linear")
-    da_sd_depth_int["depth"]=data_original["depth"]
+    	depth_std=np.transpose(np.tile(da_sd_depth_int.data,(time_dim,1)))
+    	
+    if depan=="mean":
 
-    depth_std=np.transpose(np.tile(da_sd_depth_int.data,(time_dim,1)))
+    	da_mean_depth["depth"]=da_mean_depth["depth"]*-1
+    	da_mean_depth_int=da_mean_depth.interpolate_na(dim="depth", method="linear")
+    	da_mean_depth_int["depth"]=data_original["depth"]
 
-    da_mean_depth["depth"]=da_mean_depth["depth"]*-1
-    da_mean_depth_int=da_mean_depth.interpolate_na(dim="depth", method="linear")
-    da_mean_depth_int["depth"]=data_original["depth"]
+    	depth_mean=np.transpose(np.tile(da_mean_depth_int.data,(time_dim,1)))
+    	
+    if depan=="max":
+    	da_max_depth["depth"]=da_max_depth["depth"]*-1
+    	da_max_depth_int=da_max_depth.interpolate_na(dim="depth", method="linear")
+    	da_max_depth_int["depth"]=data_original["depth"]
+    	depth_max=np.transpose(np.tile(da_max_depth_int.data,(time_dim,1)))
+    	
+    if depan=="median":
 
-    depth_mean=np.transpose(np.tile(da_mean_depth_int.data,(time_dim,1)))
+    	da_median_depth["depth"]=da_median_depth["depth"]*-1
+    	da_median_depth_int=da_median_depth.interpolate_na(dim="depth", method="linear")
+    	da_median_depth_int["depth"]=data_original["depth"]
 
-    da_max_depth["depth"]=da_max_depth["depth"]*-1
-    da_max_depth_int=da_max_depth.interpolate_na(dim="depth", method="linear")
-    da_max_depth_int["depth"]=data_original["depth"]
-
-    depth_max=np.transpose(np.tile(da_max_depth_int.data,(time_dim,1)))
-
-    da_median_depth["depth"]=da_median_depth["depth"]*-1
-    da_median_depth_int=da_median_depth.interpolate_na(dim="depth", method="linear")
-    da_median_depth_int["depth"]=data_original["depth"]
-
-    depth_median=np.transpose(np.tile(da_median_depth_int.data,(time_dim,1)))
+    	depth_median=np.transpose(np.tile(da_median_depth_int.data,(time_dim,1)))
 
 
 
@@ -3072,4 +3078,935 @@ def one_cov_dayofyear_g2s_2D(original,var1,cov,var2,cov_name,obs_in_day,N,percen
                 plt.show()
 
 
+    return simulations,da
+
+
+def one_cov_g2s_2D_rec(original,var1,cov,var2,obs_in_day,N,max_timesteps,depan="linear",depth_profile=[1],sp=False,thetis=False):
+    data_original = original[var1]
+
+    covar = cov[var2].transpose().copy()
+    timeofday = data_original.time.dt.hour.values #C
+
+    depth_dim, time_dim = data_original.shape
+
+    depth_linear = np.transpose(np.tile(data_original.depth.data,(time_dim,1)))
+
+    depth_inverse = 1/depth_linear
+    
+    if thetis==True:
+    	print("Thetis depth interpolation is not supported")
+    
+    else:
+        mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2) # this needs to be changed for IDRONAUT AND THETIS
+        da_var_depth=data_original.var(dim="time")
+        # where we have more than 50% nans, we dont trust the variance and put missing values
+        da_var_depth[mask_var]=np.nan
+        #we fill these missing values with linear interpolated values
+        da_var_depth["depth"]=da_var_depth["depth"]*-1
+        da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+        da_var_depth_int["depth"]=data_original["depth"]
+        depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+        if da_var_depth.isnull().sum().values>15:
+            depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
+
+    if len(depth_profile)>1:
+    	depth_variance=depth_profile
+
+    if depan=="linear":
+        ti = np.stack([data_original.data, depth_linear, covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_linear, covar.data],axis = 2)
+    if depan=="inverse":
+        ti = np.stack([data_original.data, depth_inverse, covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_inverse, covar.data],axis = 2)
+    if depan=="var":
+        ti = np.stack([data_original.data, depth_variance, covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_variance, covar.data],axis = 2)
+    dt = [0,0,0]
+
+
+    if sp==True:
+        sp_traces=generate_simulation_path_wo_gaps(data_original.values,max_timesteps)
+        simulations_stack,index_stack = ensemble_QS(N = N,sp=sp_traces,
+                              ti=ti,
+                              di=di,
+                              dt=dt, #Zero for continuous variables
+                              k=1.2,
+                              n=50,
+                              j=0.4,
+                              ki=None)
+    else:
+        simulations_stack,index_stack = ensemble_QS(N = N,
+                              ti=ti,
+                              di=di,
+                              dt=dt, #Zero for continuous variables
+                              k=1.2,
+                              n=50,
+                              j=0.4,
+                              ki=None)
+    simulations = xr.DataArray(data =simulations_stack[:,:,:,0],coords = {'realizations':np.arange(1,simulations_stack.shape[0]+1),'depth':data_original.depth.data,'time':data_original.time})
+    return simulations
+
+def one_cov_g2s_2D_3layer_rec(original,var1,cov,var2,obs_in_day,N,max_timesteps,sp=False):
+    data_original = original[var1]
+    xr_alllayers=[]
+    xr_onelayer=[]
+    
+    covar = cov[var2].transpose().copy()
+    for depth in range(len(data_original.depth.values)):
+        if depth==0:
+            depth_index=[depth+1, depth, depth+1]
+            single_depth=data_original.depth.values[depth]
+            single_depth_covar=covar.depth.values[depth]
+        else:
+            depth_index=[depth-1,depth,depth+1]
+            single_depth=data_original.depth.values[depth]
+            single_depth_covar=covar.depth.values[depth]
+
+
+        if depth==37:
+            depth_index=[depth-1,depth,depth-1]
+            single_depth=data_original.depth.values[depth]
+            single_depth_covar=covar.depth.values[depth]
+
+        data_3layer=data_original.isel(depth=depth_index)
+        data_3layer_covar=covar.isel(depth=depth_index)
+        
+
+        timeofday = data_3layer.time.dt.hour.values #C
+        depth_dim, time_dim = data_3layer.shape
+
+        sin_calendar = sin_costfunction(time_dim,daily_timesteps = obs_in_day)
+        cos_calendar = cos_costfunction(time_dim,daily_timesteps = obs_in_day)
+
+
+        sin_2D = np.tile(sin_calendar, (depth_dim,1))
+        cos_2D = np.tile(cos_calendar, (depth_dim,1))
+        timeofday_2D = np.tile(timeofday, (depth_dim,1))
+
+        ti = np.stack([data_3layer.data, data_3layer_covar.data],axis = 2)
+        di = np.stack([data_3layer.data, data_3layer_covar.data],axis = 2)
+        dt = [0,0]
+        print("isel depth is "+str(depth))
+
+
+        if sp==True:
+            sp_traces=generate_simulation_path_wo_gaps(data_3layer.values,max_timesteps)
+            simulations_stack,index_stack = ensemble_QS(N = N,sp=sp_traces,
+                                  ti=ti,
+                                  di=di,
+                                  dt=dt, #Zero for continuous variables
+                                  k=1.2,
+                                  n=50,
+                                  j=0.4,
+                                  ki=None)
+        else:
+            simulations_stack,index_stack = ensemble_QS(N = N,
+                                  ti=ti,
+                                  di=di,
+                                  dt=dt, #Zero for continuous variables
+                                  k=1.2,
+                                  n=50,
+                                  j=0.4,
+                                  ki=None)
+        simulations = xr.DataArray(data =simulations_stack[:,:,:,0],coords = {'realizations':np.arange(1,simulations_stack.shape[0]+1),'depth':data_3layer.depth.data,'time':data_3layer.time})
+        xr_alllayers.append(simulations)
+        xr_onelayer.append(simulations.isel(depth=1))
+    full_rec=xr.concat(xr_onelayer,"depth")
+        
+
+    return xr_alllayers,full_rec
+
+def day_of_year_g2s_2D_rec(original,var1,obs_in_day,N,max_timesteps,depan="linear",depth_profile=[1],sp=False):
+    data_original = original[var1]
+    
+    #covar = cov[var2].transpose().copy()
+    timeofday = data_original.time.dt.hour.values #C
+
+    depth_dim, time_dim = data_original.shape
+
+    depth_linear = np.transpose(np.tile(data_original.depth.data,(time_dim,1)))
+    
+    depth_inverse = 1/depth_linear
+
+    # where do we have more than 50% nans
+    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2) # this needs to be changed for IDRONAUT AND THETIS
+    # create the variance over time
+    da_var_depth=data_original.var(dim="time")
+    # where we have more than 50% nans, we dont trust the variance and put missing values
+    da_var_depth[mask_var]=np.nan
+    #we fill these missing values with linear interpolated values
+    da_var_depth["depth"]=da_var_depth["depth"]*-1
+    da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+    da_var_depth_int["depth"]=data_original["depth"]
+
+    depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+
+    if da_var_depth.isnull().sum().values>15:
+        depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
+        
+    if len(depth_profile)>1:
+    	depth_variance=depth_profile
+
+    sin_calendar = sin_costfunction(time_dim,daily_timesteps = obs_in_day)
+    cos_calendar = cos_costfunction(time_dim,daily_timesteps = obs_in_day)
+
+    sin_2D = np.tile(sin_calendar, (depth_dim,1))
+    cos_2D = np.tile(cos_calendar, (depth_dim,1))
+    timeofday_2D = np.tile(timeofday, (depth_dim,1))
+
+
+    if depan=="linear":
+        ti = np.stack([data_original.data, depth_linear, sin_2D, cos_2D],axis = 2)
+        di = np.stack([data_original.data, depth_linear, sin_2D, cos_2D],axis = 2)
+    if depan=="inverse":
+        ti = np.stack([data_original.data, depth_inverse, sin_2D, cos_2D],axis = 2)
+        di = np.stack([data_original.data, depth_inverse, sin_2D, cos_2D],axis = 2)
+    if depan=="var":
+        ti = np.stack([data_original.data, depth_variance, sin_2D, cos_2D],axis = 2)
+        di = np.stack([data_original.data, depth_variance, sin_2D, cos_2D],axis = 2)
+    dt = [0,0,0,0]
+
+
+    if sp==True:
+        sp_traces=generate_simulation_path_wo_gaps(data_original.values,max_timesteps)
+        simulations_stack,index_stack = ensemble_QS(N = N,sp=sp_traces,
+                              ti=ti,
+                              di=di,
+                              dt=dt, #Zero for continuous variables
+                              k=1.2,
+                              n=50,
+                              j=0.4,
+                              ki=None)
+    else:
+        simulations_stack,index_stack = ensemble_QS(N = N,
+                              ti=ti,
+                              di=di,
+                              dt=dt, #Zero for continuous variables
+                              k=1.2,
+                              n=50,
+                              j=0.4,
+                              ki=None)
+    simulations = xr.DataArray(data =simulations_stack[:,:,:,0],coords = {'realizations':np.arange(1,simulations_stack.shape[0]+1),'depth':data_original.depth.data,'time':data_original.time})
+    return simulations
+
+def univ_g2s_2D_thetis(original,var,comp,vs_name,obs_in_day,N,df,csv_folder,plot_folder,name,depan="linear",depth_profile=[1]):
+    data_original = original[var]
+    data_comparison=comp[var]
+    data_comparison_median=data_comparison.median(dim="realizations")
+    data_comparison_mean=data_comparison.mean(dim="realizations")
+    
+    data_original["depth"]=data_comparison["depth"]
+    output_name=csv_folder+name+var+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+    
+    timeofday = data_original.time.dt.hour.values
+    #runs=np.arange(1,test_runs+1)
+    
+    depth_dim, time_dim = data_original.shape
+    
+    depth_linear = np.transpose(np.tile(data_original.depth.data,(time_dim,1)))
+    
+    depth_inverse = 1/depth_linear
+    
+    # where do we have more than 50% nans. this needs to be change for idronaut and thetis
+    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2)
+    # statistics over time
+    da_var_depth=data_original.var(dim="time")
+    da_sd_depth=data_original.std(dim="time")
+    da_mean_depth=data_original.mean(dim="time")
+    da_median_depth=data_original.median(dim="time")
+    da_max_depth=data_original.max(dim="time")
+    # where we have more than 50% nans, we dont trust the variance and put missing values
+    da_var_depth[mask_var]=np.nan
+    da_sd_depth[mask_var]=np.nan
+    da_mean_depth[mask_var]=np.nan
+    da_median_depth[mask_var]=np.nan
+    da_max_depth[mask_var]=np.nan
+    #we fill these missing values with linear interpolated values
+    if depan=="var":
+        da_var_depth["depth"]=da_var_depth["depth"]*-1
+        da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+        da_var_depth_int["depth"]=data_original["depth"]
+    
+        depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+        
+    if depan=="std":
+        da_sd_depth["depth"]=da_sd_depth["depth"]*-1
+        da_sd_depth_int=da_sd_depth.interpolate_na(dim="depth", method="linear")
+        da_sd_depth_int["depth"]=data_original["depth"]
+    
+        depth_std=np.transpose(np.tile(da_sd_depth_int.data,(time_dim,1)))
+        
+    if depan=="mean":
+    
+        da_mean_depth["depth"]=da_mean_depth["depth"]*-1
+        da_mean_depth_int=da_mean_depth.interpolate_na(dim="depth", method="linear")
+        da_mean_depth_int["depth"]=data_original["depth"]
+    
+        depth_mean=np.transpose(np.tile(da_mean_depth_int.data,(time_dim,1)))
+        
+    if depan=="max":
+        da_max_depth["depth"]=da_max_depth["depth"]*-1
+        da_max_depth_int=da_max_depth.interpolate_na(dim="depth", method="linear")
+        da_max_depth_int["depth"]=data_original["depth"]
+        depth_max=np.transpose(np.tile(da_max_depth_int.data,(time_dim,1)))
+        
+    if depan=="median":
+    
+        da_median_depth["depth"]=da_median_depth["depth"]*-1
+        da_median_depth_int=da_median_depth.interpolate_na(dim="depth", method="linear")
+        da_median_depth_int["depth"]=data_original["depth"]
+    
+        depth_median=np.transpose(np.tile(da_median_depth_int.data,(time_dim,1)))
+    
+    
+    
+    
+    
+    if da_var_depth.isnull().sum().values>15:
+        depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
+        
+    if len(depth_profile)>1:
+        depth_variance=depth_profile
+        
+    sin_calendar = sin_costfunction(time_dim,daily_timesteps = obs_in_day)
+    cos_calendar = cos_costfunction(time_dim,daily_timesteps = obs_in_day)
+    #print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+    
+    #Univariate gap-filling
+    
+    if depan=="linear":
+        name_addedinfo="UVl"
+        ti = np.stack([data_original.data, depth_linear],axis = 2)
+        di = np.stack([data_original.data, depth_linear],axis = 2)
+    if depan=="inverse":
+        name_addedinfo="UVi"
+        ti = np.stack([data_original.data, depth_inverse],axis = 2)
+        di = np.stack([data_original.data, depth_inverse],axis = 2)
+    if depan=="var":
+        name_addedinfo="UVv"
+        ti = np.stack([data_original.data, depth_variance],axis = 2)
+        di = np.stack([data_original.data, depth_variance],axis = 2)
+    if depan=="std":
+        name_addedinfo="UVs"
+        ti = np.stack([data_original.data, depth_std],axis = 2)
+        di = np.stack([data_original.data, depth_std],axis = 2)
+    if depan=="max":
+        name_addedinfo="UVx"
+        ti = np.stack([data_original.data, depth_max],axis = 2)
+        di = np.stack([data_original.data, depth_max],axis = 2)
+    if depan=="mean":
+        name_addedinfo="UVm"
+        ti = np.stack([data_original.data, depth_mean],axis = 2)
+        di = np.stack([data_original.data, depth_mean],axis = 2)
+    if depan=="median":
+        name_addedinfo="UVd"
+        ti = np.stack([data_original.data, depth_median],axis = 2)
+        di = np.stack([data_original.data, depth_median],axis = 2)
+    dt = [0,0]
+    
+    
+    stacked,index_stack = ensemble_QS(N = N,
+                          ti=ti, 
+                          di=di,
+                          dt=dt, #Zero for continuous variables
+                          k=1.2,
+                          n=50,
+                          j=0.25,
+                          ki=None)
+    simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':data_original.time})
+    
+    simulations_median=simulations.median(dim="realizations")
+    simulations_mean=simulations.mean(dim="realizations")
+    name_addedinfo=name_addedinfo+"_"+vs_name
+    
+    
+    simulations_lin=data_original.interpolate_na(dim="time", method="linear")
+    simulations_slin=data_original.interpolate_na(dim="time", method="slinear")
+    simulations_akima=data_original.interpolate_na(dim="time", method="akima")
+    simulations_spline=data_original.interpolate_na(dim="time", method="spline")
+    simulations_quad=data_original.interpolate_na(dim="time", method="quadratic")
+    simulations_pchip=data_original.interpolate_na(dim="time", method="pchip")
+    simulations_subdlin=subdaily_linear_interp(data_original,times_of_day = obs_in_day)
+    
+    error_lin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_lin.data-data_comparison_median.data)**2))),4)
+    error_akima = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_akima.data-data_comparison_median.data)**2))),4)
+    error_spline = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_spline.data-data_comparison_median.data)**2))),4)
+    error_quad = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_quad.data-data_comparison_median.data)**2))),4)
+    error_pchip = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_pchip.data-data_comparison_median.data)**2))),4)
+    error_subdlin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_subdlin.data-data_comparison_median.data)**2))),4)
+    
+    corr_lin=np.round(xr.corr(data_comparison_median, simulations_lin, dim="time").mean().values,4)
+    corr_akima=np.round(xr.corr(data_comparison_median, simulations_akima, dim="time").mean().values,4)
+    corr_spline=np.round(xr.corr(data_comparison_median, simulations_spline, dim="time").mean().values,4)
+    corr_quad=np.round(xr.corr(data_comparison_median, simulations_quad, dim="time").mean().values,4)
+    corr_pchip=np.round(xr.corr(data_comparison_median, simulations_pchip, dim="time").mean().values,4)
+    corr_subdlin=np.round(xr.corr(data_comparison_median, simulations_subdlin, dim="time").mean().values,4)
+    
+    corr_median=np.round(xr.corr(data_comparison_median, simulations_median, dim="time").mean().values,4)
+    error_median = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_median.data-data_comparison_median.data)**2))),4)
+    std_ratio_median=np.round(np.nanmean((data_comparison_median/simulations_median).mean(dim="time").values),4)
+    
+    corr_mean=np.round(xr.corr(data_comparison_mean, simulations_mean, dim="time").mean().values,4)
+    error_mean = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_mean.data-data_comparison_mean.data)**2))),4)
+    std_ratio_mean=np.round(np.nanmean((data_comparison_mean/simulations_mean).mean(dim="time").values),4)
+    
+    df_temp = pd.DataFrame([[name_addedinfo,N, corr_median, corr_mean,corr_lin,corr_akima,corr_spline,corr_quad,corr_pchip,corr_subdlin,error_median,error_mean,error_lin,error_akima,error_spline,error_quad,error_pchip,error_subdlin,std_ratio_median,std_ratio_mean]], columns=df.columns)
+    # 20 # columns_df=["NAME","MEMBER","CORRMED","CORRMEA","CORR_lin","CORR_akima","CORR_spline","CORR_quad","CORR_pchip","CORR_subdlin","RMSEMED","RMSEMEA","RMSE_lin","RMSE_akima","RMSE_spline","RMSE_quad","RMSE_pchip","RMSE_subdlin","STDRMED","STDRMEA"]
+    
+    df = pd.concat([df, df_temp], axis=0)
+    
+    df.to_csv(output_name, index=False)
+    
+    
+    return simulations,df
+    
+def day_of_year_g2s_2D_thetis(original,var,comp,vs_name,obs_in_day,N,df,csv_folder,plot_folder,name,depan="linear",depth_profile=[1]):
+    data_original = original[var]
+    data_comparison=comp[var]
+    data_comparison_median=data_comparison.median(dim="realizations")
+    data_comparison_mean=data_comparison.mean(dim="realizations")
+    
+    data_original["depth"]=data_comparison["depth"]
+    output_name=csv_folder+name+var+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+    
+    timeofday = data_original.time.dt.hour.values
+    #runs=np.arange(1,test_runs+1)
+    
+    depth_dim, time_dim = data_original.shape
+    
+    depth_linear = np.transpose(np.tile(data_original.depth.data,(time_dim,1)))
+    
+    depth_inverse = 1/depth_linear
+    
+    # where do we have more than 50% nans. this needs to be change for idronaut and thetis
+    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2)
+    # statistics over time
+    da_var_depth=data_original.var(dim="time")
+    da_sd_depth=data_original.std(dim="time")
+    da_mean_depth=data_original.mean(dim="time")
+    da_median_depth=data_original.median(dim="time")
+    da_max_depth=data_original.max(dim="time")
+    # where we have more than 50% nans, we dont trust the variance and put missing values
+    da_var_depth[mask_var]=np.nan
+    da_sd_depth[mask_var]=np.nan
+    da_mean_depth[mask_var]=np.nan
+    da_median_depth[mask_var]=np.nan
+    da_max_depth[mask_var]=np.nan
+    #we fill these missing values with linear interpolated values
+    if depan=="var":
+        da_var_depth["depth"]=da_var_depth["depth"]*-1
+        da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+        da_var_depth_int["depth"]=data_original["depth"]
+    
+        depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+        
+    if depan=="std":
+        da_sd_depth["depth"]=da_sd_depth["depth"]*-1
+        da_sd_depth_int=da_sd_depth.interpolate_na(dim="depth", method="linear")
+        da_sd_depth_int["depth"]=data_original["depth"]
+    
+        depth_std=np.transpose(np.tile(da_sd_depth_int.data,(time_dim,1)))
+        
+    if depan=="mean":
+    
+        da_mean_depth["depth"]=da_mean_depth["depth"]*-1
+        da_mean_depth_int=da_mean_depth.interpolate_na(dim="depth", method="linear")
+        da_mean_depth_int["depth"]=data_original["depth"]
+    
+        depth_mean=np.transpose(np.tile(da_mean_depth_int.data,(time_dim,1)))
+        
+    if depan=="max":
+        da_max_depth["depth"]=da_max_depth["depth"]*-1
+        da_max_depth_int=da_max_depth.interpolate_na(dim="depth", method="linear")
+        da_max_depth_int["depth"]=data_original["depth"]
+        depth_max=np.transpose(np.tile(da_max_depth_int.data,(time_dim,1)))
+        
+    if depan=="median":
+    
+        da_median_depth["depth"]=da_median_depth["depth"]*-1
+        da_median_depth_int=da_median_depth.interpolate_na(dim="depth", method="linear")
+        da_median_depth_int["depth"]=data_original["depth"]
+    
+        depth_median=np.transpose(np.tile(da_median_depth_int.data,(time_dim,1)))
+    
+    
+    
+    
+    
+    if da_var_depth.isnull().sum().values>15:
+        depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
+        
+    if len(depth_profile)>1:
+        depth_variance=depth_profile
+        
+    sin_calendar = sin_costfunction(time_dim,daily_timesteps = obs_in_day)
+    cos_calendar = cos_costfunction(time_dim,daily_timesteps = obs_in_day)
+    #print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+    
+    #Univariate gap-filling
+    
+    name_addedinfo="calday"
+    sin_2D = np.tile(sin_calendar, (depth_dim,1))
+    cos_2D = np.tile(cos_calendar, (depth_dim,1))
+    timeofday_2D = np.tile(timeofday, (depth_dim,1))
+
+    
+    if depan=="linear":
+        name_addedinfo="caldayl"
+        ti = np.stack([data_original.data, depth_linear,sin_2D, cos_2D],axis = 2)
+        di = np.stack([data_original.data, depth_linear,sin_2D, cos_2D],axis = 2)
+    if depan=="inverse":
+        name_addedinfo="caldayi"
+        ti = np.stack([data_original.data, depth_inverse,sin_2D, cos_2D],axis = 2)
+        di = np.stack([data_original.data, depth_inverse,sin_2D, cos_2D],axis = 2)
+    if depan=="var":
+        name_addedinfo="caldayv"
+        ti = np.stack([data_original.data, depth_variance,sin_2D, cos_2D],axis = 2)
+        di = np.stack([data_original.data, depth_variance,sin_2D, cos_2D],axis = 2)
+    if depan=="std":
+        name_addedinfo="caldays"
+        ti = np.stack([data_original.data, depth_std,sin_2D, cos_2D],axis = 2)
+        di = np.stack([data_original.data, depth_std,sin_2D, cos_2D],axis = 2)
+    if depan=="max":
+        name_addedinfo="caldayx"
+        ti = np.stack([data_original.data, depth_max,sin_2D, cos_2D],axis = 2)
+        di = np.stack([data_original.data, depth_max,sin_2D, cos_2D],axis = 2)
+    if depan=="mean":
+        name_addedinfo="caldaym"
+        ti = np.stack([data_original.data, depth_mean,sin_2D, cos_2D],axis = 2)
+        di = np.stack([data_original.data, depth_mean,sin_2D, cos_2D],axis = 2)
+    if depan=="median":
+        name_addedinfo="caldayd"
+        ti = np.stack([data_original.data, depth_median],axis = 2)
+        di = np.stack([data_original.data, depth_median],axis = 2)
+    dt = [0,0,0,0]
+    
+    
+    stacked,index_stack = ensemble_QS(N = N,
+                          ti=ti, 
+                          di=di,
+                          dt=dt, #Zero for continuous variables
+                          k=1.2,
+                          n=50,
+                          j=0.25,
+                          ki=None)
+    simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':data_original.time})
+    
+    simulations_median=simulations.median(dim="realizations")
+    simulations_mean=simulations.mean(dim="realizations")
+    name_addedinfo=name_addedinfo+"_"+vs_name
+    
+    
+    simulations_lin=data_original.interpolate_na(dim="time", method="linear")
+    simulations_slin=data_original.interpolate_na(dim="time", method="slinear")
+    simulations_akima=data_original.interpolate_na(dim="time", method="akima")
+    simulations_spline=data_original.interpolate_na(dim="time", method="spline")
+    simulations_quad=data_original.interpolate_na(dim="time", method="quadratic")
+    simulations_pchip=data_original.interpolate_na(dim="time", method="pchip")
+    simulations_subdlin=subdaily_linear_interp(data_original,times_of_day = obs_in_day)
+    
+    error_lin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_lin.data-data_comparison_median.data)**2))),4)
+    error_akima = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_akima.data-data_comparison_median.data)**2))),4)
+    error_spline = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_spline.data-data_comparison_median.data)**2))),4)
+    error_quad = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_quad.data-data_comparison_median.data)**2))),4)
+    error_pchip = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_pchip.data-data_comparison_median.data)**2))),4)
+    error_subdlin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_subdlin.data-data_comparison_median.data)**2))),4)
+    
+    corr_lin=np.round(xr.corr(data_comparison_median, simulations_lin, dim="time").mean().values,4)
+    corr_akima=np.round(xr.corr(data_comparison_median, simulations_akima, dim="time").mean().values,4)
+    corr_spline=np.round(xr.corr(data_comparison_median, simulations_spline, dim="time").mean().values,4)
+    corr_quad=np.round(xr.corr(data_comparison_median, simulations_quad, dim="time").mean().values,4)
+    corr_pchip=np.round(xr.corr(data_comparison_median, simulations_pchip, dim="time").mean().values,4)
+    corr_subdlin=np.round(xr.corr(data_comparison_median, simulations_subdlin, dim="time").mean().values,4)
+    
+    corr_median=np.round(xr.corr(data_comparison_median, simulations_median, dim="time").mean().values,4)
+    error_median = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_median.data-data_comparison_median.data)**2))),4)
+    std_ratio_median=np.round(np.nanmean((data_comparison_median/simulations_median).mean(dim="time").values),4)
+    
+    corr_mean=np.round(xr.corr(data_comparison_mean, simulations_mean, dim="time").mean().values,4)
+    error_mean = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_mean.data-data_comparison_mean.data)**2))),4)
+    std_ratio_mean=np.round(np.nanmean((data_comparison_mean/simulations_mean).mean(dim="time").values),4)
+    
+    df_temp = pd.DataFrame([[name_addedinfo,N, corr_median, corr_mean,corr_lin,corr_akima,corr_spline,corr_quad,corr_pchip,corr_subdlin,error_median,error_mean,error_lin,error_akima,error_spline,error_quad,error_pchip,error_subdlin,std_ratio_median,std_ratio_mean]], columns=df.columns)
+    # 20 # columns_df=["NAME","MEMBER","CORRMED","CORRMEA","CORR_lin","CORR_akima","CORR_spline","CORR_quad","CORR_pchip","CORR_subdlin","RMSEMED","RMSEMEA","RMSE_lin","RMSE_akima","RMSE_spline","RMSE_quad","RMSE_pchip","RMSE_subdlin","STDRMED","STDRMEA"]
+    
+    df = pd.concat([df, df_temp], axis=0)
+    
+    df.to_csv(output_name, index=False)
+    
+    
+    return simulations,df
+    
+
+    
+    
+    
+def time_of_day_of_year_g2s_2D_thetis(original,var,comp,vs_name,obs_in_day,N,df,csv_folder,plot_folder,name,depan="linear",depth_profile=[1]):
+    data_original = original[var]
+    data_comparison=comp[var]
+    data_comparison_median=data_comparison.median(dim="realizations")
+    data_comparison_mean=data_comparison.mean(dim="realizations")
+    
+    data_original["depth"]=data_comparison["depth"]
+    output_name=csv_folder+name+var+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+    
+    timeofday = data_original.time.dt.hour.values
+    #runs=np.arange(1,test_runs+1)
+    
+    depth_dim, time_dim = data_original.shape
+    
+    depth_linear = np.transpose(np.tile(data_original.depth.data,(time_dim,1)))
+    
+    depth_inverse = 1/depth_linear
+    
+    # where do we have more than 50% nans. this needs to be change for idronaut and thetis
+    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2)
+    # statistics over time
+    da_var_depth=data_original.var(dim="time")
+    da_sd_depth=data_original.std(dim="time")
+    da_mean_depth=data_original.mean(dim="time")
+    da_median_depth=data_original.median(dim="time")
+    da_max_depth=data_original.max(dim="time")
+    # where we have more than 50% nans, we dont trust the variance and put missing values
+    da_var_depth[mask_var]=np.nan
+    da_sd_depth[mask_var]=np.nan
+    da_mean_depth[mask_var]=np.nan
+    da_median_depth[mask_var]=np.nan
+    da_max_depth[mask_var]=np.nan
+    #we fill these missing values with linear interpolated values
+    if depan=="var":
+        da_var_depth["depth"]=da_var_depth["depth"]*-1
+        da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+        da_var_depth_int["depth"]=data_original["depth"]
+    
+        depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+        
+    if depan=="std":
+        da_sd_depth["depth"]=da_sd_depth["depth"]*-1
+        da_sd_depth_int=da_sd_depth.interpolate_na(dim="depth", method="linear")
+        da_sd_depth_int["depth"]=data_original["depth"]
+    
+        depth_std=np.transpose(np.tile(da_sd_depth_int.data,(time_dim,1)))
+        
+    if depan=="mean":
+    
+        da_mean_depth["depth"]=da_mean_depth["depth"]*-1
+        da_mean_depth_int=da_mean_depth.interpolate_na(dim="depth", method="linear")
+        da_mean_depth_int["depth"]=data_original["depth"]
+    
+        depth_mean=np.transpose(np.tile(da_mean_depth_int.data,(time_dim,1)))
+        
+    if depan=="max":
+        da_max_depth["depth"]=da_max_depth["depth"]*-1
+        da_max_depth_int=da_max_depth.interpolate_na(dim="depth", method="linear")
+        da_max_depth_int["depth"]=data_original["depth"]
+        depth_max=np.transpose(np.tile(da_max_depth_int.data,(time_dim,1)))
+        
+    if depan=="median":
+    
+        da_median_depth["depth"]=da_median_depth["depth"]*-1
+        da_median_depth_int=da_median_depth.interpolate_na(dim="depth", method="linear")
+        da_median_depth_int["depth"]=data_original["depth"]
+    
+        depth_median=np.transpose(np.tile(da_median_depth_int.data,(time_dim,1)))
+    
+    
+    
+    
+    
+    if da_var_depth.isnull().sum().values>15:
+        depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
+        
+    if len(depth_profile)>1:
+        depth_variance=depth_profile
+        
+    sin_calendar = sin_costfunction(time_dim,daily_timesteps = obs_in_day)
+    cos_calendar = cos_costfunction(time_dim,daily_timesteps = obs_in_day)
+    #print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+    
+    #Univariate gap-filling
+    
+    name_addedinfo="caldaytimeday"
+    sin_2D = np.tile(sin_calendar, (depth_dim,1))
+    cos_2D = np.tile(cos_calendar, (depth_dim,1))
+    timeofday_2D = np.tile(timeofday, (depth_dim,1))
+
+    
+    if depan=="linear":
+        name_addedinfo="caldaytimedayl"
+        ti = np.stack([data_original.data, depth_linear,sin_2D, cos_2D,timeofday_2D],axis = 2)
+        di = np.stack([data_original.data, depth_linear,sin_2D, cos_2D,timeofday_2D],axis = 2)
+    if depan=="inverse":
+        name_addedinfo="caldaytimedayi"
+        ti = np.stack([data_original.data, depth_inverse,sin_2D, cos_2D,timeofday_2D],axis = 2)
+        di = np.stack([data_original.data, depth_inverse,sin_2D, cos_2D,timeofday_2D],axis = 2)
+    if depan=="var":
+        name_addedinfo="caldaytimedayv"
+        ti = np.stack([data_original.data, depth_variance,sin_2D, cos_2D,timeofday_2D],axis = 2)
+        di = np.stack([data_original.data, depth_variance,sin_2D, cos_2D,timeofday_2D],axis = 2)
+    if depan=="std":
+        name_addedinfo="caldaytimedays"
+        ti = np.stack([data_original.data, depth_std,sin_2D, cos_2D,timeofday_2D],axis = 2)
+        di = np.stack([data_original.data, depth_std,sin_2D, cos_2D,timeofday_2D],axis = 2)
+    if depan=="max":
+        name_addedinfo="caldaytimedayx"
+        ti = np.stack([data_original.data, depth_max,sin_2D, cos_2D,timeofday_2D],axis = 2)
+        di = np.stack([data_original.data, depth_max,sin_2D, cos_2D,timeofday_2D],axis = 2)
+    if depan=="mean":
+        name_addedinfo="caldaytimedaym"
+        ti = np.stack([data_original.data, depth_mean,sin_2D, cos_2D,timeofday_2D],axis = 2)
+        di = np.stack([data_original.data, depth_mean,sin_2D, cos_2D,timeofday_2D],axis = 2)
+    if depan=="median":
+        name_addedinfo="caldaytimedayd"
+        ti = np.stack([data_original.data, depth_median,sin_2D, cos_2D,timeofday_2D],axis = 2)
+        di = np.stack([data_original.data, depth_median,sin_2D, cos_2D,timeofday_2D],axis = 2)
+    dt = [0,0,0,0,1]
+    
+    
+    stacked,index_stack = ensemble_QS(N = N,
+                          ti=ti, 
+                          di=di,
+                          dt=dt, #Zero for continuous variables
+                          k=1.2,
+                          n=50,
+                          j=0.25,
+                          ki=None)
+    simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':data_original.time})
+    
+    simulations_median=simulations.median(dim="realizations")
+    simulations_mean=simulations.mean(dim="realizations")
+    name_addedinfo=name_addedinfo+"_"+vs_name
+    
+    
+    simulations_lin=data_original.interpolate_na(dim="time", method="linear")
+    simulations_slin=data_original.interpolate_na(dim="time", method="slinear")
+    simulations_akima=data_original.interpolate_na(dim="time", method="akima")
+    simulations_spline=data_original.interpolate_na(dim="time", method="spline")
+    simulations_quad=data_original.interpolate_na(dim="time", method="quadratic")
+    simulations_pchip=data_original.interpolate_na(dim="time", method="pchip")
+    simulations_subdlin=subdaily_linear_interp(data_original,times_of_day = obs_in_day)
+    
+    error_lin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_lin.data-data_comparison_median.data)**2))),4)
+    error_akima = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_akima.data-data_comparison_median.data)**2))),4)
+    error_spline = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_spline.data-data_comparison_median.data)**2))),4)
+    error_quad = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_quad.data-data_comparison_median.data)**2))),4)
+    error_pchip = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_pchip.data-data_comparison_median.data)**2))),4)
+    error_subdlin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_subdlin.data-data_comparison_median.data)**2))),4)
+    
+    corr_lin=np.round(xr.corr(data_comparison_median, simulations_lin, dim="time").mean().values,4)
+    corr_akima=np.round(xr.corr(data_comparison_median, simulations_akima, dim="time").mean().values,4)
+    corr_spline=np.round(xr.corr(data_comparison_median, simulations_spline, dim="time").mean().values,4)
+    corr_quad=np.round(xr.corr(data_comparison_median, simulations_quad, dim="time").mean().values,4)
+    corr_pchip=np.round(xr.corr(data_comparison_median, simulations_pchip, dim="time").mean().values,4)
+    corr_subdlin=np.round(xr.corr(data_comparison_median, simulations_subdlin, dim="time").mean().values,4)
+    
+    corr_median=np.round(xr.corr(data_comparison_median, simulations_median, dim="time").mean().values,4)
+    error_median = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_median.data-data_comparison_median.data)**2))),4)
+    std_ratio_median=np.round(np.nanmean((data_comparison_median/simulations_median).mean(dim="time").values),4)
+    
+    corr_mean=np.round(xr.corr(data_comparison_mean, simulations_mean, dim="time").mean().values,4)
+    error_mean = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_mean.data-data_comparison_mean.data)**2))),4)
+    std_ratio_mean=np.round(np.nanmean((data_comparison_mean/simulations_mean).mean(dim="time").values),4)
+    
+    df_temp = pd.DataFrame([[name_addedinfo,N, corr_median, corr_mean,corr_lin,corr_akima,corr_spline,corr_quad,corr_pchip,corr_subdlin,error_median,error_mean,error_lin,error_akima,error_spline,error_quad,error_pchip,error_subdlin,std_ratio_median,std_ratio_mean]], columns=df.columns)
+    # 20 # columns_df=["NAME","MEMBER","CORRMED","CORRMEA","CORR_lin","CORR_akima","CORR_spline","CORR_quad","CORR_pchip","CORR_subdlin","RMSEMED","RMSEMEA","RMSE_lin","RMSE_akima","RMSE_spline","RMSE_quad","RMSE_pchip","RMSE_subdlin","STDRMED","STDRMEA"]
+    
+    df = pd.concat([df, df_temp], axis=0)
+    
+    df.to_csv(output_name, index=False)
+    
+    
+    return simulations,df
+    
+def one_cov_g2s_2D_thetis(original,var1,cov,var2,cov_name,comp,vs_name,obs_in_day,N,df,csv_folder,plot_folder,name,depan="linear",depth_profile=[1]):
+    data_original = original[var1]
+    data_comparison=comp[var1]
+    data_comparison_median=data_comparison.median(dim="realizations")
+    data_comparison_mean=data_comparison.mean(dim="realizations")
+    
+    data_original["depth"]=data_comparison["depth"]
+    output_name=csv_folder+name+var1+".csv"
+    print("metrics saved to: "+output_name)
+    if os.path.exists(output_name):
+        df=pd.read_csv(output_name)
+    
+    timeofday = data_original.time.dt.hour.values
+    #runs=np.arange(1,test_runs+1)
+    
+    depth_dim, time_dim = data_original.shape
+    
+    depth_linear = np.transpose(np.tile(data_original.depth.data,(time_dim,1)))
+    
+    depth_inverse = 1/depth_linear
+    covar = cov[var2].transpose().copy()
+    
+    # where do we have more than 50% nans. this needs to be change for idronaut and thetis
+    mask_var=data_original.isnull().sum(dim="time")>(data_original.data.shape[1]/2)
+    # statistics over time
+    da_var_depth=data_original.var(dim="time")
+    da_sd_depth=data_original.std(dim="time")
+    da_mean_depth=data_original.mean(dim="time")
+    da_median_depth=data_original.median(dim="time")
+    da_max_depth=data_original.max(dim="time")
+    # where we have more than 50% nans, we dont trust the variance and put missing values
+    da_var_depth[mask_var]=np.nan
+    da_sd_depth[mask_var]=np.nan
+    da_mean_depth[mask_var]=np.nan
+    da_median_depth[mask_var]=np.nan
+    da_max_depth[mask_var]=np.nan
+    #we fill these missing values with linear interpolated values
+    if depan=="var":
+        da_var_depth["depth"]=da_var_depth["depth"]*-1
+        da_var_depth_int=da_var_depth.interpolate_na(dim="depth", method="linear")
+        da_var_depth_int["depth"]=data_original["depth"]
+    
+        depth_variance=np.transpose(np.tile(da_var_depth_int.data,(time_dim,1)))
+        
+    if depan=="std":
+        da_sd_depth["depth"]=da_sd_depth["depth"]*-1
+        da_sd_depth_int=da_sd_depth.interpolate_na(dim="depth", method="linear")
+        da_sd_depth_int["depth"]=data_original["depth"]
+    
+        depth_std=np.transpose(np.tile(da_sd_depth_int.data,(time_dim,1)))
+        
+    if depan=="mean":
+    
+        da_mean_depth["depth"]=da_mean_depth["depth"]*-1
+        da_mean_depth_int=da_mean_depth.interpolate_na(dim="depth", method="linear")
+        da_mean_depth_int["depth"]=data_original["depth"]
+    
+        depth_mean=np.transpose(np.tile(da_mean_depth_int.data,(time_dim,1)))
+        
+    if depan=="max":
+        da_max_depth["depth"]=da_max_depth["depth"]*-1
+        da_max_depth_int=da_max_depth.interpolate_na(dim="depth", method="linear")
+        da_max_depth_int["depth"]=data_original["depth"]
+        depth_max=np.transpose(np.tile(da_max_depth_int.data,(time_dim,1)))
+        
+    if depan=="median":
+    
+        da_median_depth["depth"]=da_median_depth["depth"]*-1
+        da_median_depth_int=da_median_depth.interpolate_na(dim="depth", method="linear")
+        da_median_depth_int["depth"]=data_original["depth"]
+    
+        depth_median=np.transpose(np.tile(da_median_depth_int.data,(time_dim,1)))
+    
+    
+    
+    
+    
+    if da_var_depth.isnull().sum().values>15:
+        depth_variance=np.flip(np.transpose(np.tile(np.log(np.arange(1,39,1)),(time_dim,1))))
+        
+    if len(depth_profile)>1:
+        depth_variance=depth_profile
+        
+    sin_calendar = sin_costfunction(time_dim,daily_timesteps = obs_in_day)
+    cos_calendar = cos_costfunction(time_dim,daily_timesteps = obs_in_day)
+    #print("This is run "+str(run)+" with N="+str(N)+" added missing % is "+str(percent)+" and Gap size is "+str(gap_amount_list[i]))
+    
+    #Univariate gap-filling
+    
+    name_addedinfo=cov_name
+    sin_2D = np.tile(sin_calendar, (depth_dim,1))
+    cos_2D = np.tile(cos_calendar, (depth_dim,1))
+    timeofday_2D = np.tile(timeofday, (depth_dim,1))
+    print(data_original.data.shape)
+    print(covar.data.shape)
+    
+    if depan=="linear":
+        name_addedinfo=name_addedinfo+"l"
+        ti = np.stack([data_original.data, depth_linear,covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_linear,covar.data],axis = 2)
+    if depan=="inverse":
+        name_addedinfo=name_addedinfo+"i"
+        ti = np.stack([data_original.data, depth_inverse,covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_inverse,covar.data],axis = 2)
+    if depan=="var":
+        name_addedinfo=name_addedinfo+"v"
+        ti = np.stack([data_original.data, depth_variance,covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_variance,covar.data],axis = 2)
+    if depan=="std":
+        name_addedinfo=name_addedinfo+"s"
+        ti = np.stack([data_original.data, depth_std,covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_std,covar.data],axis = 2)
+    if depan=="max":
+        name_addedinfo=name_addedinfo+"x"
+        ti = np.stack([data_original.data, depth_max,covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_max,covar.data],axis = 2)
+    if depan=="mean":
+        name_addedinfo=name_addedinfo+"m"
+        ti = np.stack([data_original.data, depth_mean,covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_mean,covar.data],axis = 2)
+    if depan=="median":
+        name_addedinfo=name_addedinfo+"d"
+        ti = np.stack([data_original.data, depth_median,covar.data],axis = 2)
+        di = np.stack([data_original.data, depth_median,covar.data],axis = 2)
+    dt = [0,0,0]
+    
+    
+    stacked,index_stack = ensemble_QS(N = N,
+                          ti=ti, 
+                          di=di,
+                          dt=dt, #Zero for continuous variables
+                          k=1.2,
+                          n=50,
+                          j=0.25,
+                          ki=None)
+    simulations = xr.DataArray(data =stacked[:,:,:,0],coords = {'realizations':np.arange(1,stacked.shape[0]+1),'depth':data_original.depth.data,'time':data_original.time})
+    
+    simulations_median=simulations.median(dim="realizations")
+    simulations_mean=simulations.mean(dim="realizations")
+    name_addedinfo=name_addedinfo+"_"+vs_name
+    
+    
+    simulations_lin=data_original.interpolate_na(dim="time", method="linear")
+    simulations_slin=data_original.interpolate_na(dim="time", method="slinear")
+    simulations_akima=data_original.interpolate_na(dim="time", method="akima")
+    simulations_spline=data_original.interpolate_na(dim="time", method="spline")
+    simulations_quad=data_original.interpolate_na(dim="time", method="quadratic")
+    simulations_pchip=data_original.interpolate_na(dim="time", method="pchip")
+    simulations_subdlin=subdaily_linear_interp(data_original,times_of_day = obs_in_day)
+    
+    error_lin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_lin.data-data_comparison_median.data)**2))),4)
+    error_akima = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_akima.data-data_comparison_median.data)**2))),4)
+    error_spline = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_spline.data-data_comparison_median.data)**2))),4)
+    error_quad = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_quad.data-data_comparison_median.data)**2))),4)
+    error_pchip = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_pchip.data-data_comparison_median.data)**2))),4)
+    error_subdlin = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_subdlin.data-data_comparison_median.data)**2))),4)
+    
+    corr_lin=np.round(xr.corr(data_comparison_median, simulations_lin, dim="time").mean().values,4)
+    corr_akima=np.round(xr.corr(data_comparison_median, simulations_akima, dim="time").mean().values,4)
+    corr_spline=np.round(xr.corr(data_comparison_median, simulations_spline, dim="time").mean().values,4)
+    corr_quad=np.round(xr.corr(data_comparison_median, simulations_quad, dim="time").mean().values,4)
+    corr_pchip=np.round(xr.corr(data_comparison_median, simulations_pchip, dim="time").mean().values,4)
+    corr_subdlin=np.round(xr.corr(data_comparison_median, simulations_subdlin, dim="time").mean().values,4)
+    
+    corr_median=np.round(xr.corr(data_comparison_median, simulations_median, dim="time").mean().values,4)
+    error_median = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_median.data-data_comparison_median.data)**2))),4)
+    std_ratio_median=np.round(np.nanmean((data_comparison_median/simulations_median).mean(dim="time").values),4)
+    
+    corr_mean=np.round(xr.corr(data_comparison_mean, simulations_mean, dim="time").mean().values,4)
+    error_mean = np.round(np.nanmean(np.sqrt(np.nanmean((simulations_mean.data-data_comparison_mean.data)**2))),4)
+    std_ratio_mean=np.round(np.nanmean((data_comparison_mean/simulations_mean).mean(dim="time").values),4)
+    std_ratio_lin=np.round(np.nanmean((data_comparison_mean/simulations_lin).mean(dim="time").values),4)
+
+    
+    df_temp = pd.DataFrame([[name_addedinfo,N, corr_median, corr_mean,corr_lin,corr_akima,corr_spline,corr_quad,corr_pchip,corr_subdlin,error_median,error_mean,error_lin,error_akima,error_spline,error_quad,error_pchip,error_subdlin,std_ratio_median,std_ratio_mean]], columns=df.columns)
+    # 20 # columns_df=["NAME","MEMBER","CORRMED","CORRMEA","CORR_lin","CORR_akima","CORR_spline","CORR_quad","CORR_pchip","CORR_subdlin","RMSEMED","RMSEMEA","RMSE_lin","RMSE_akima","RMSE_spline","RMSE_quad","RMSE_pchip","RMSE_subdlin","STDRMED","STDRMEA"]
+    
+    df = pd.concat([df, df_temp], axis=0)
+    
+    df.to_csv(output_name, index=False)
+    
+    
     return simulations,df
